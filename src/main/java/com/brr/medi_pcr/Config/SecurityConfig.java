@@ -68,7 +68,10 @@ public class SecurityConfig {
                                 "/auth/fcm-token/**",
                                 "/fcm-token",
                                 "/status",
-                                "/health"
+                                "/status/**",
+                                "/health",
+                                "/health/**",
+                                "/ping"
                         ).permitAll()
                         // Public OPTIONS pre-flight checks
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
