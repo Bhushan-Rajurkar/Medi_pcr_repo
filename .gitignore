@@ -1,0 +1,49 @@
+HELP.md
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+### Environment Variables & Secrets ###
+.env
+*.env
+.env.local
+.env.*.local
+!*.env.example
+
+# Firebase / Google Cloud keys
+*firebase-adminsdk*.json
+!src/main/resources/my-medi-pcr-firebase-adminsdk-fbsvc-d963a4e80a.json
+*.json.key
+
+# Environment files
+.env
+.env.*

@@ -1,0 +1,23 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Maven build outputs and wrapper
+target/
+.mvn/
+mvnw
+mvnw.cmd
+
+# IDE and editor settings
+.idea/
+.vscode/
+*.iml
+
+# Environment and sensitive secrets
+.env
+*.env.local
+
+# Sub-apps and documentation
+MY_APP/
+HELP.md
