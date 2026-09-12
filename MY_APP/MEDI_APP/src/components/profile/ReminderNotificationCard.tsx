@@ -178,12 +178,21 @@ export const ReminderNotificationCard: React.FC = () => {
             { action: 'taken', title: '✓ Taken' },
             { action: 'snooze', title: '⏰ Snooze (5m)' },
           ],
-        } as any);
+        // 3. Play alarm audio ringtone and trigger active ringing overlay
+        alarmService.startAlarm({
+          title: '💊 Medicine Reminder (Device Test)',
+          body: 'Instruction: After Food\n• Stamlo 5mg\n• Arvant 10mg',
+          medicineNames: ['Stamlo 5mg', 'Arvant 10mg'],
+          foodInstruction: 'After Food',
+          count: 2,
+          scheduledTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          receivedAt: Date.now(),
+        });
 
         setToast({
           id: 'direct_ok',
           type: 'success',
-          message: '🔔 2 notifications sent! All 4 action buttons (Taken, Snooze, Postpone, Missed) are visible in your Windows Notification Center.',
+          message: '🔔 2 notifications sent with audio alarm! All 4 action buttons (Taken, Snooze, Postpone, Missed) are visible in your Windows Notification Center.',
         });
       }
     } catch (e: any) {

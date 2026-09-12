@@ -148,30 +148,45 @@ function processPushPayload(payload, eventWaitUntil) {
     };
     promises.push(self.registration.showNotification(title, actionsOptions));
   } else {
-    // Single Unified High-Priority Notification with all 4 Action Buttons
+    // 2-Notification Pattern (Same as Direct Test with all 4 Action Buttons & Audio)
     const mainTitle = title || '💊 Medicine Reminder';
     const mainBody = (body && body !== 'Time to take your scheduled medicine.')
       ? body
       : (medicineNames ? ('Instruction: ' + (foodInstruction || 'General') + '\n• ' + medicineNames) : 'Time to take your scheduled medicine.');
 
-    const notifOptions = {
+    // Notification 1: Medicine Details & Instructions (Postpone & Missed)
+    const detailsOptions = {
       body: mainBody,
       icon: iconUrl,
       badge: iconUrl,
-      tag: 'medi-pcr-reminder-' + Date.now(),
+      tag: 'medi-pcr-details-' + Date.now(),
       renotify: true,
-      requireInteraction: true,
-      silent: false,
-      vibrate: [500, 250, 500, 250, 500],
-      data: Object.assign({}, commonData, { notifType: 'ACTIONS' }),
+      requireInteraction: false,
+      vibrate: [300, 100, 300],
+      data: Object.assign({}, commonData, { notifType: 'DETAILS' }),
       actions: [
-        { action: 'taken', title: count > 1 ? `✓ Taken (${count})` : '✓ Taken' },
-        { action: 'snooze', title: '⏰ Snooze (5m)' },
         { action: 'postpone', title: '⏳ Postpone' },
         { action: 'dismiss', title: '✕ Missed' }
       ]
     };
-    promises.push(self.registration.showNotification(mainTitle, notifOptions));
+    promises.push(self.registration.showNotification(mainTitle, detailsOptions));
+
+    // Notification 2: MediStatus 1-Click Action Buttons (Taken & Snooze)
+    const actionsOptions = {
+      body: 'Tap a button below to update status directly:',
+      icon: iconUrl,
+      badge: iconUrl,
+      tag: 'medi-pcr-actions-' + Date.now(),
+      renotify: true,
+      requireInteraction: true,
+      vibrate: [500, 250, 500],
+      data: Object.assign({}, commonData, { notifType: 'ACTIONS' }),
+      actions: [
+        { action: 'taken', title: count > 1 ? `✓ Taken (${count})` : '✓ Taken' },
+        { action: 'snooze', title: '⏰ Snooze (5m)' }
+      ]
+    };
+    promises.push(self.registration.showNotification('📋 Update MediStatus: Did you take your medicine?', actionsOptions));
   }
 
   const combinedPromise = Promise.all(promises);
@@ -305,8 +320,8 @@ self.addEventListener('notificationclick', function (event) {
     endpoint = 'complete';
   }
 
-  const host = (self.location && self.location.hostname) ? self.location.hostname : 'localhost';
-  const apiBase = 'http://' + host + ':8080/api/v1.1';
+  const isLocal = !self.location || self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1';
+  const apiBase = isLocal ? 'http://localhost:8080/api/v1.1' : 'https://medi-pcr-repo.onrender.com/api/v1.1';
 
   const rIdArray = reminderIds
     ? (typeof reminderIds === 'string' ? reminderIds.split(',').filter(Boolean).map(s => Number(s.trim())) : reminderIds)

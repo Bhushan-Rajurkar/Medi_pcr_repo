@@ -401,20 +401,35 @@ class AlarmService {
 
       if ('serviceWorker' in navigator) {
         const reg = await navigator.serviceWorker.ready;
+        // Notification 1: Medicine Details & Instructions (Postpone & Missed)
         await reg.showNotification(title, {
           body: body,
           icon: iconUrl,
           badge: iconUrl,
-          tag: 'medi-pcr-device-alarm',
+          tag: 'medi-pcr-details-' + Date.now(),
+          renotify: true,
+          requireInteraction: false,
+          vibrate: [300, 100, 300],
+          data: notifData,
+          actions: [
+            { action: 'postpone', title: '⏳ Postpone' },
+            { action: 'dismiss', title: '✕ Missed' },
+          ],
+        } as any);
+
+        // Notification 2: MediStatus 1-Click Action Buttons (Taken & Snooze)
+        await reg.showNotification('📋 Update MediStatus: Did you take your medicine?', {
+          body: 'Tap a button below to update status directly:',
+          icon: iconUrl,
+          badge: iconUrl,
+          tag: 'medi-pcr-actions-' + Date.now(),
           renotify: true,
           requireInteraction: true,
-          vibrate: [500, 250, 500, 250, 500],
+          vibrate: [500, 250, 500],
           data: notifData,
           actions: [
             { action: 'taken', title: count > 1 ? `✓ Taken (${count})` : '✓ Taken' },
             { action: 'snooze', title: '⏰ Snooze (5m)' },
-            { action: 'postpone', title: '⏳ Postpone' },
-            { action: 'dismiss', title: '✕ Missed' },
           ],
         } as any);
       } else {
