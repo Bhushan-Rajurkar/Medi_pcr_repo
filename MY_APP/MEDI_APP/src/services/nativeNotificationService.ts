@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { isRunningInExpoGo } from 'expo';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { alarmService } from './alarmService';
 import { fcmService } from './fcmService';
@@ -7,6 +8,7 @@ import { notifeeNotificationService } from './notifeeNotificationService';
 export const ALARM_CHANNEL_ID = 'medicine-reminder-alarm';
 
 export const isExpoGo =
+  isRunningInExpoGo() ||
   Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
   (Constants as any).appOwnership === 'expo';
 

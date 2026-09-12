@@ -1,4 +1,5 @@
 import { Platform, NativeModules } from 'react-native';
+import { isRunningInExpoGo } from 'expo';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { apiClient } from './api';
 
@@ -28,6 +29,7 @@ class NotifeeNotificationService {
     if (Platform.OS === 'web') return false;
     // In Expo Go, custom native modules like Notifee are not bundled into the binary.
     const isExpoGo =
+      isRunningInExpoGo() ||
       Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
       (Constants as any).appOwnership === 'expo';
     if (isExpoGo) return false;
