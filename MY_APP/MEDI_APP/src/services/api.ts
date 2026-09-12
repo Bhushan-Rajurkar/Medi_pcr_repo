@@ -1,16 +1,30 @@
 import { Platform } from 'react-native';
 
 const getBaseUrl = (): string => {
-  if (process.env.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL;
-  }
-  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
-    const hostname = window.location.hostname;
-    if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
-      return `http://${hostname}:8080/api/v1.1`;
+  let url = process.env.EXPO_PUBLIC_API_URL?.trim();
+
+  if (!url) {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
+      const hostname = window.location.hostname;
+      if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
+        url = `http://${hostname}:8080`;
+      }
     }
   }
-  return 'http://localhost:8080/api/v1.1';
+
+  if (!url) {
+    url = 'https://medi-pcr-repo.onrender.com';
+  }
+
+  // Remove trailing slashes
+  url = url.replace(/\/+$/, '');
+
+  // Ensure context-path /api/v1.1 is included
+  if (!url.endsWith('/api/v1.1')) {
+    url = `${url}/api/v1.1`;
+  }
+
+  return url;
 };
 
 const DEFAULT_BASE_URL = getBaseUrl();
