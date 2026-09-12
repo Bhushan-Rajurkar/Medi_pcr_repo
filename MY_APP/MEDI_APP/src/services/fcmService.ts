@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getMessaging, getToken, deleteToken, onMessage, Messaging } from 'firebase/messaging';
 import { apiClient } from './api';
@@ -22,7 +23,7 @@ class FcmService {
   private isForegroundListening: boolean = false;
 
   constructor() {
-    if (typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       this.initFirebase();
       window.addEventListener('SYNC_FCM_TOKEN', () => {
         this.autoSyncToken(false);

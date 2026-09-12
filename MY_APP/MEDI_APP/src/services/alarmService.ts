@@ -32,7 +32,7 @@ class AlarmService {
   private triggeredSlots: Set<string> = new Set();
 
   constructor() {
-    if (typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
       this.initAudio();
       this.listenToServiceWorker();
       this.setupAutoplayUnlock();
@@ -42,6 +42,7 @@ class AlarmService {
   }
 
   private initAudio(): void {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || typeof Audio === 'undefined') return;
     try {
       // Primary ringtone in music folder
       const audioUrl = '/music/Born_To_Shine_-_Ringtone____Diljit_dosanjh_Song_Ringtones_@diljitdosanjh(256k).mp3';
@@ -67,7 +68,7 @@ class AlarmService {
    * to comply with browser Autoplay Policy
    */
   public setupAutoplayUnlock(): void {
-    if (typeof window === 'undefined') return;
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
 
     const unlock = () => {
       try {
@@ -114,7 +115,7 @@ class AlarmService {
    * Rings the alarm audio and shows the overlay immediately.
    */
   public checkUrlAlarmTrigger(): void {
-    if (typeof window === 'undefined') return;
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.location) return;
     try {
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('alarm') === '1' || urlParams.get('alarm') === 'true') {
@@ -196,7 +197,12 @@ class AlarmService {
   }
 
   private listenToServiceWorker(): void {
-    if (this.isServiceWorkerListening || typeof window === 'undefined') {
+    if (
+      this.isServiceWorkerListening ||
+      Platform.OS !== 'web' ||
+      typeof window === 'undefined' ||
+      typeof window.addEventListener !== 'function'
+    ) {
       return;
     }
 
@@ -239,7 +245,7 @@ class AlarmService {
       }
     }
 
-    if ('serviceWorker' in navigator) {
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('message', handleMessage);
     }
     window.addEventListener('message', handleMessage);
@@ -315,7 +321,7 @@ class AlarmService {
       }
     }
 
-    if (typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
       // 1. Show interactive notification on the device (lock screen, action center, notification shade)
       this.showDeviceNotification(info);
 
@@ -369,7 +375,7 @@ class AlarmService {
    * so the reminder pops up directly on the device (outside the app window / lock screen)
    */
   public async showDeviceNotification(info: ActiveAlarmInfo): Promise<void> {
-    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || !('Notification' in window)) return;
 
     try {
       if (Notification.permission === 'default') {
@@ -461,7 +467,7 @@ class AlarmService {
     this.stopSynthAlarm();
     this.notify();
 
-    if (typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
       try {
         if (this.audioElement) {
           this.audioElement.pause();
@@ -489,7 +495,7 @@ class AlarmService {
    * even if FCM push notification was delayed or blocked by browser/network.
    */
   private startLocalScheduler(): void {
-    if (typeof window === 'undefined') return;
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
 
     const checkReminders = async () => {
       // If already ringing, don't trigger new check
@@ -657,7 +663,7 @@ class AlarmService {
         }
       }
     } finally {
-      if (typeof window !== 'undefined') {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
         window.dispatchEvent(new CustomEvent('MEDISTATUS_UPDATED', { detail: { action } }));
       }
     }

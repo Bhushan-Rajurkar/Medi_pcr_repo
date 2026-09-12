@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Pressable,
+  Platform,
 } from 'react-native';
 import { useAppTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
@@ -134,6 +135,29 @@ export const ReminderNotificationCard: React.FC = () => {
   };
 
   const handleTestDeviceNotificationDirectly = async () => {
+    if (Platform.OS !== 'web') {
+      try {
+        await notifeeNotificationService.testReminderNotification();
+        await alarmService.startAlarm({
+          title: '💊 Medicine Reminder (Device Test)',
+          body: 'Instruction: After Food\n• Stamlo 5mg\n• Arvant 10mg',
+          medicineNames: ['Stamlo 5mg', 'Arvant 10mg'],
+          foodInstruction: 'After Food',
+          count: 2,
+          scheduledTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          receivedAt: Date.now(),
+        });
+        setToast({
+          id: 'direct_ok',
+          type: 'success',
+          message: '🔔 Reminder notification triggered on your mobile device with action buttons!',
+        });
+      } catch (e: any) {
+        setToast({ id: 'err', type: 'error', message: e.message || 'Failed to trigger notification.' });
+      }
+      return;
+    }
+
     if (typeof window === 'undefined' || !('Notification' in window)) {
       setToast({ id: 'err', type: 'error', message: 'Notifications are not supported in this browser.' });
       return;
