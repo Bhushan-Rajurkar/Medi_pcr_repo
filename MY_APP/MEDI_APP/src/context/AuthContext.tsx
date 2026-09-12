@@ -44,6 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(profile);
             if (Platform.OS === 'web' && typeof window !== 'undefined') {
               localStorage.setItem(USER_KEY, JSON.stringify(profile));
+              window.dispatchEvent(new Event('SYNC_FCM_TOKEN'));
             }
           } catch (err) {
             // Token is invalid/expired - clear stale credentials so user is cleanly redirected to Login
@@ -115,6 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(profile);
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         localStorage.setItem(USER_KEY, JSON.stringify(profile));
+        window.dispatchEvent(new Event('SYNC_FCM_TOKEN'));
       }
     } finally {
       setIsLoading(false);

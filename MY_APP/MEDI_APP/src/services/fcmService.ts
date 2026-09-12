@@ -235,18 +235,22 @@ class FcmService {
     const syncPayload = { fcmToken: token, userEmail, userId };
 
     // 5. Send token to Spring Boot backend API
-    try {
-      await apiClient.post('/reminders/fcm-token', syncPayload);
-      console.log('[fcmService] Token successfully synchronized with backend /reminders/fcm-token');
-    } catch (fallbackErr) {
-      console.warn('Backend /reminders/fcm-token notice:', fallbackErr);
+    if (userEmail || userId || apiClient.getToken()) {
+      try {
+        await apiClient.post('/reminders/fcm-token', syncPayload);
+        console.log('[fcmService] Token successfully synchronized with backend /reminders/fcm-token');
+      } catch (fallbackErr) {
+        console.warn('Backend /reminders/fcm-token notice:', fallbackErr);
+      }
     }
 
-    try {
-      await apiClient.post('/auth/fcm-token', syncPayload);
-      console.log('[fcmService] Token successfully synchronized with backend /auth/fcm-token');
-    } catch (authErr) {
-      console.warn('Syncing with /auth/fcm-token notice:', authErr);
+    if (apiClient.getToken()) {
+      try {
+        await apiClient.post('/auth/fcm-token', syncPayload);
+        console.log('[fcmService] Token successfully synchronized with backend /auth/fcm-token');
+      } catch (authErr) {
+        console.warn('Syncing with /auth/fcm-token notice:', authErr);
+      }
     }
 
     return {

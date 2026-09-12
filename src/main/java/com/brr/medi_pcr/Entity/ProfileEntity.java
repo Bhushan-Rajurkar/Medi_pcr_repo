@@ -89,7 +89,7 @@ public class ProfileEntity {
     private String qrCodeToken;
 
     @Lob
-    @Column(name = "qr_code_data_url", columnDefinition = "LONGTEXT")
+    @Column(name = "qr_code_data_url", columnDefinition = "TEXT")
     private String qrCodeDataUrl;
 
     @Builder.Default

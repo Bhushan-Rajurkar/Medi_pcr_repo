@@ -393,24 +393,14 @@ public class ReminderController {
                     targetUser = userRepository.findById(Long.parseLong(String.valueOf(body.get("userId")))).orElse(null);
                 } catch (Exception ignored) {}
             }
-            if (targetUser == null) {
-                // Find patient user with active prescriptions
-                java.util.List<com.brr.medi_pcr.Entity.Medicine> allMeds = medicineRepository.findAll();
-                for (com.brr.medi_pcr.Entity.Medicine m : allMeds) {
-                    if (m.getPrescription() != null && m.getPrescription().getUser() != null) {
-                        targetUser = m.getPrescription().getUser();
-                        break;
-                    }
-                }
-            }
-            if (targetUser == null) {
-                targetUser = userRepository.findAll().stream().findFirst().orElse(null);
-            }
             if (targetUser != null) {
                 targetUser.setFcmToken(finalToken.trim());
                 userRepository.save(targetUser);
                 org.slf4j.LoggerFactory.getLogger(ReminderController.class)
-                        .info("✅ FCM Token refreshed for user {}: {}", targetUser.getEmail(), finalToken.substring(0, Math.min(20, finalToken.length())) + "...");
+                        .info("✅ FCM Token registered for {} (role: {}): {}", targetUser.getEmail(), targetUser.getRole(), finalToken.substring(0, Math.min(20, finalToken.length())) + "...");
+            } else {
+                org.slf4j.LoggerFactory.getLogger(ReminderController.class)
+                        .info("ℹ️ FCM Token received from unauthenticated device, awaiting user/admin login: {}", finalToken.substring(0, Math.min(20, finalToken.length())) + "...");
             }
         }
         return ResponseEntity.ok(ApiResponse.success("FCM Token recorded: " + finalToken));
