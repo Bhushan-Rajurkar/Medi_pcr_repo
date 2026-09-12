@@ -178,6 +178,8 @@ export const ReminderNotificationCard: React.FC = () => {
             { action: 'taken', title: '✓ Taken' },
             { action: 'snooze', title: '⏰ Snooze (5m)' },
           ],
+        } as any);
+
         // 3. Play alarm audio ringtone and trigger active ringing overlay
         alarmService.startAlarm({
           title: '💊 Medicine Reminder (Device Test)',
