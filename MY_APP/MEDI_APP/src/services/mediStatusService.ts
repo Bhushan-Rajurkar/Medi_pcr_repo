@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { apiClient } from './api';
 
 export interface LogMediStatusRequest {
@@ -75,7 +76,7 @@ export interface TabularReport {
 }
 
 export function notifyMediStatusUpdated(detail?: any) {
-  if (typeof window !== 'undefined') {
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
     try {
       window.dispatchEvent(new CustomEvent('MEDISTATUS_UPDATED', { detail }));
     } catch (e) {

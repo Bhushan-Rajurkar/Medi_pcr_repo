@@ -8,6 +8,7 @@ import {
   TextInput,
   ScrollView,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useAppTheme } from '@/context/ThemeContext';
 import { BorderRadius, Spacing } from '@/constants/theme';
@@ -39,9 +40,12 @@ export const ReasonFormModal: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    if (Platform.OS !== 'web') return;
+
     // 1. Listen for SW messages
+    let handleMessage: any = null;
     if (typeof navigator !== 'undefined' && navigator.serviceWorker) {
-      const handleMessage = (event: MessageEvent) => {
+      handleMessage = (event: MessageEvent) => {
         if (event.data?.type === 'OPEN_REASON_MODAL') {
           openFromPayload(event.data);
         }
@@ -71,6 +75,12 @@ export const ReasonFormModal: React.FC = () => {
         // ignore
       }
     }
+
+    return () => {
+      if (typeof navigator !== 'undefined' && navigator.serviceWorker && handleMessage) {
+        navigator.serviceWorker.removeEventListener('message', handleMessage);
+      }
+    };
   }, []);
 
   const openFromPayload = (data: any) => {

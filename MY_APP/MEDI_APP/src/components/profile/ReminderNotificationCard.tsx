@@ -45,7 +45,7 @@ export const ReminderNotificationCard: React.FC = () => {
     checkStatus();
 
     // Re-check automatically when user switches back to this tab (e.g. after toggling browser address bar permissions)
-    if (typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       window.addEventListener('focus', checkStatus);
       return () => window.removeEventListener('focus', checkStatus);
     }

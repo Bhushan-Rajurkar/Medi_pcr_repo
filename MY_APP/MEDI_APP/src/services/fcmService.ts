@@ -322,7 +322,7 @@ class FcmService {
   }
 
   public getStoredToken(): string | null {
-    if (typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
       try {
         const stored = localStorage.getItem(FCM_TOKEN_STORAGE_KEY);
         if (stored && stored.trim()) return stored.trim();
@@ -350,21 +350,21 @@ class FcmService {
   }
 
   public getPermissionStatus(): NotificationPermission | 'unsupported' {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
       return Notification.permission;
     }
     return 'unsupported';
   }
 
   public isPermissionGranted(): boolean {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
       return Notification.permission === 'granted';
     }
     return false;
   }
 
   public isPermissionDenied(): boolean {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
       return Notification.permission === 'denied';
     }
     return false;

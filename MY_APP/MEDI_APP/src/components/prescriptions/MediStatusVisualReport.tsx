@@ -120,14 +120,14 @@ export const MediStatusVisualReport: React.FC<MediStatusVisualReportProps> = () 
       loadReport(days, true);
       loadTabularReport(tabularDays, categoryFilter, true);
     };
-    if (typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       window.addEventListener('MEDISTATUS_UPDATED', handleStatusUpdate);
       window.addEventListener('focus', handleStatusUpdate);
     }
 
     // 4. Listen for Service Worker messages (device notification 1-click actions)
     let handleSwMessage: any = null;
-    if (typeof navigator !== 'undefined' && navigator.serviceWorker) {
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.serviceWorker) {
       handleSwMessage = (event: MessageEvent) => {
         if (event.data?.type === 'MEDISTATUS_UPDATED' || event.data?.type === 'STOP_ALARM') {
           loadReport(days, true);
@@ -144,20 +144,20 @@ export const MediStatusVisualReport: React.FC<MediStatusVisualReportProps> = () 
         loadTabularReport(tabularDays, categoryFilter, true);
       }
     };
-    if (typeof document !== 'undefined') {
+    if (Platform.OS === 'web' && typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
       document.addEventListener('visibilitychange', handleVisibilityChange);
     }
 
     return () => {
       clearInterval(interval);
-      if (typeof window !== 'undefined') {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
         window.removeEventListener('MEDISTATUS_UPDATED', handleStatusUpdate);
         window.removeEventListener('focus', handleStatusUpdate);
       }
-      if (typeof navigator !== 'undefined' && navigator.serviceWorker && handleSwMessage) {
+      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.serviceWorker && handleSwMessage) {
         navigator.serviceWorker.removeEventListener('message', handleSwMessage);
       }
-      if (typeof document !== 'undefined') {
+      if (Platform.OS === 'web' && typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
         document.removeEventListener('visibilitychange', handleVisibilityChange);
       }
     };
