@@ -1,6 +1,5 @@
 import { Platform, NativeModules } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
-import * as Notifications from 'expo-notifications';
 import { apiClient } from './api';
 
 export const NOTIFEE_CHANNEL_ID = 'medicine-reminder-alarm';
@@ -119,10 +118,10 @@ class NotifeeNotificationService {
 
   /**
    * Displays high-priority reminder notification with interactive action buttons and audio alarm.
-   * Uses Notifee on standalone/dev builds, and cleanly falls back to expo-notifications on Expo Go.
+   * Runs on standalone/development builds where Notifee native module exists.
    */
   public async displayReminder(payload: NotifeeReminderPayload): Promise<string | null> {
-    if (Platform.OS === 'web') return null;
+    if (Platform.OS === 'web' || !this.isNotifeeSupported()) return null;
 
     const rIds = payload.reminderIds || (payload.reminderId ? [payload.reminderId] : []);
     const mIds = payload.medicineIds || [];
@@ -130,76 +129,54 @@ class NotifeeNotificationService {
 
     try {
       const notifee = await this.getNotifee();
-      if (notifee) {
-        await this.init();
+      if (!notifee) return null;
 
-        const { AndroidImportance, AndroidCategory } = await import('@notifee/react-native');
+      await this.init();
 
-        const notifId = await notifee.displayNotification({
-          title: payload.title,
-          body: payload.body,
-          data: {
-            reminderIds: rIds.join(','),
-            reminderId: payload.reminderId || rIds[0] || '',
-            medicineIds: mIds.join(','),
-            medicineNames: (payload.medicineNames || []).join(', '),
-            foodInstruction: payload.foodInstruction || '',
-            scheduledTime: payload.scheduledTime || '',
+      const { AndroidImportance, AndroidCategory } = await import('@notifee/react-native');
+
+      const notifId = await notifee.displayNotification({
+        title: payload.title,
+        body: payload.body,
+        data: {
+          reminderIds: rIds.join(','),
+          reminderId: payload.reminderId || rIds[0] || '',
+          medicineIds: mIds.join(','),
+          medicineNames: (payload.medicineNames || []).join(', '),
+          foodInstruction: payload.foodInstruction || '',
+          scheduledTime: payload.scheduledTime || '',
+        },
+        android: {
+          channelId: NOTIFEE_CHANNEL_ID,
+          importance: AndroidImportance.HIGH,
+          category: AndroidCategory.ALARM,
+          sound: 'default',
+          pressAction: {
+            id: 'default',
           },
-          android: {
-            channelId: NOTIFEE_CHANNEL_ID,
-            importance: AndroidImportance.HIGH,
-            category: AndroidCategory.ALARM,
-            sound: 'default',
-            pressAction: {
-              id: 'default',
+          actions: [
+            {
+              title: count > 1 ? `✓ Taken (${count})` : '✓ Taken',
+              pressAction: { id: 'taken' },
             },
-            actions: [
-              {
-                title: count > 1 ? `✓ Taken (${count})` : '✓ Taken',
-                pressAction: { id: 'taken' },
-              },
-              {
-                title: '⏰ Snooze (5m)',
-                pressAction: { id: 'snooze' },
-              },
-              {
-                title: '⏳ Postpone',
-                pressAction: { id: 'postpone' },
-              },
-              {
-                title: '✕ Missed',
-                pressAction: { id: 'dismiss' },
-              },
-            ],
-          },
-        });
-
-        console.log('🚀 [NotifeeNotificationService] Displayed reminder notification ID:', notifId);
-        return notifId;
-      } else {
-        // Fallback for Expo Go using expo-notifications
-        const notifId = await Notifications.scheduleNotificationAsync({
-          content: {
-            title: payload.title,
-            body: payload.body,
-            data: {
-              reminderIds: rIds.join(','),
-              reminderId: payload.reminderId || rIds[0] || '',
-              medicineIds: mIds.join(','),
-              medicineNames: (payload.medicineNames || []).join(', '),
-              foodInstruction: payload.foodInstruction || '',
-              scheduledTime: payload.scheduledTime || '',
+            {
+              title: '⏰ Snooze (5m)',
+              pressAction: { id: 'snooze' },
             },
-            categoryIdentifier: 'MEDICINE_ACTIONS',
-            sound: 'default',
-          },
-          trigger: null,
-        });
+            {
+              title: '⏳ Postpone',
+              pressAction: { id: 'postpone' },
+            },
+            {
+              title: '✕ Missed',
+              pressAction: { id: 'dismiss' },
+            },
+          ],
+        },
+      });
 
-        console.log('🚀 [Expo Notifications fallback] Displayed reminder notification ID:', notifId);
-        return notifId;
-      }
+      console.log('🚀 [NotifeeNotificationService] Displayed reminder notification ID:', notifId);
+      return notifId;
     } catch (e) {
       console.warn('Error displaying reminder notification:', e);
       return null;

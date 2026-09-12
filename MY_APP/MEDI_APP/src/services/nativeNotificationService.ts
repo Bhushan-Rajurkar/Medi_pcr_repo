@@ -1,10 +1,26 @@
 import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { alarmService } from './alarmService';
 import { fcmService } from './fcmService';
 import { notifeeNotificationService } from './notifeeNotificationService';
 
 export const ALARM_CHANNEL_ID = 'medicine-reminder-alarm';
+
+export const isExpoGo =
+  Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
+  (Constants as any).appOwnership === 'expo';
+
+let notificationsModule: any = null;
+async function getNotifications() {
+  if (Platform.OS === 'web' || isExpoGo) return null;
+  if (notificationsModule) return notificationsModule;
+  try {
+    notificationsModule = await import('expo-notifications');
+    return notificationsModule;
+  } catch (err) {
+    return null;
+  }
+}
 
 class NativeNotificationService {
   private isInitialized = false;
@@ -18,14 +34,20 @@ class NativeNotificationService {
     if (this.isInitialized) return;
     this.isInitialized = true;
 
-    // Only configure native notification handlers on mobile platforms (Android/iOS)
-    if (Platform.OS === 'web') {
+    // In web or Expo Go (SDK 53+), native remote notification handlers are not available.
+    // In Expo Go, the app relies on the responsive in-app AlarmOverlay.
+    if (Platform.OS === 'web' || isExpoGo) {
+      console.log('ℹ️ [NativeNotificationService] Running in Expo Go / Web; using in-app alarm overlay.');
       return;
     }
 
     try {
+      const Notifications = await getNotifications();
+      if (!Notifications) return;
+
       // 0. Initialize Notifee high-priority channel
       await notifeeNotificationService.init();
+
       // 1. Configure foreground notification presentation handler
       Notifications.setNotificationHandler({
         handleNotification: async () => ({
@@ -34,7 +56,7 @@ class NativeNotificationService {
           shouldSetBadge: true,
           shouldShowBanner: true,
           shouldShowList: true,
-          priority: Notifications.AndroidNotificationPriority.MAX,
+          priority: Notifications.AndroidNotificationPriority?.MAX || 5,
         }),
       });
 
@@ -43,17 +65,17 @@ class NativeNotificationService {
         await Notifications.setNotificationChannelAsync(ALARM_CHANNEL_ID, {
           name: 'Medicine Reminder Alarm',
           description: 'High-priority sound alarms and reminders for scheduled patient medications',
-          importance: Notifications.AndroidImportance.MAX,
+          importance: Notifications.AndroidImportance?.MAX || 5,
           vibrationPattern: [0, 500, 250, 500, 250, 500],
           lightColor: '#208AEF',
           enableLights: true,
           enableVibrate: true,
           bypassDnd: true,
-          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+          lockscreenVisibility: Notifications.AndroidNotificationVisibility?.PUBLIC || 1,
           sound: 'default',
           audioAttributes: {
-            usage: Notifications.AndroidAudioUsage.ALARM,
-            contentType: Notifications.AndroidAudioContentType.SONIFICATION,
+            usage: Notifications.AndroidAudioUsage?.ALARM || 4,
+            contentType: Notifications.AndroidAudioContentType?.SONIFICATION || 4,
           },
         });
 
@@ -102,9 +124,9 @@ class NativeNotificationService {
 
       // 4. Listen for notifications received while app is foregrounded
       this.notificationListenerSubscription = Notifications.addNotificationReceivedListener(
-        (notification) => {
+        (notification: any) => {
           console.log('🔔 [NativeNotificationService] Notification received in foreground:', notification);
-          const data = (notification.request.content.data || {}) as Record<string, any>;
+          const data = (notification?.request?.content?.data || {}) as Record<string, any>;
           const reminderId = data.reminderId ? String(data.reminderId) : (data.id ? String(data.id) : undefined);
           const reminderIds: string[] = data.reminderIds
             ? (typeof data.reminderIds === 'string'
@@ -130,8 +152,8 @@ class NativeNotificationService {
             foodInstruction: data.foodInstruction ? String(data.foodInstruction) : undefined,
             count: Number(data.count) || 1,
             scheduledTime: data.scheduledTime ? String(data.scheduledTime) : undefined,
-            title: notification.request.content.title || '💊 Medicine Reminder',
-            body: notification.request.content.body || '',
+            title: notification?.request?.content?.title || '💊 Medicine Reminder',
+            body: notification?.request?.content?.body || '',
             receivedAt: Date.now(),
           });
         }
@@ -139,8 +161,8 @@ class NativeNotificationService {
 
       // 5. Listen for user taps and notification action button interactions
       this.responseListenerSubscription = Notifications.addNotificationResponseReceivedListener(
-        async (response) => {
-          const actionId = response.actionIdentifier;
+        async (response: any) => {
+          const actionId = response?.actionIdentifier;
           console.log('👆 [NativeNotificationService] User interacted with notification action:', actionId);
 
           if (actionId === 'taken' || actionId === 'snooze' || actionId === 'postpone' || actionId === 'dismiss') {
@@ -160,7 +182,10 @@ class NativeNotificationService {
    * Retrieves native device push token and syncs with backend
    */
   async syncNativePushToken(): Promise<string | null> {
-    if (Platform.OS === 'web') return null;
+    if (Platform.OS === 'web' || isExpoGo) return null;
+
+    const Notifications = await getNotifications();
+    if (!Notifications) return null;
 
     try {
       const tokenData = await Notifications.getDevicePushTokenAsync();
@@ -190,7 +215,6 @@ class NativeNotificationService {
 
   /**
    * Schedules a local exact Android alarm for offline reliability.
-   * This guarantees alarms fire even if the device has no internet connection!
    */
   async scheduleLocalExactAlarm(params: {
     id: string;
@@ -199,7 +223,10 @@ class NativeNotificationService {
     minute: number;
     foodInstruction?: string;
   }): Promise<string | null> {
-    if (Platform.OS === 'web') return null;
+    if (Platform.OS === 'web' || isExpoGo) return null;
+
+    const Notifications = await getNotifications();
+    if (!Notifications) return null;
 
     try {
       const identifier = await Notifications.scheduleNotificationAsync({
@@ -208,7 +235,7 @@ class NativeNotificationService {
           title: `💊 Time to take ${params.medicineName}`,
           body: `Instruction: ${params.foodInstruction || 'General'}. Tap to record status.`,
           sound: 'default',
-          priority: Notifications.AndroidNotificationPriority.MAX,
+          priority: Notifications.AndroidNotificationPriority?.MAX || 5,
           categoryIdentifier: 'MEDICINE_ACTIONS',
           data: {
             medicineId: params.id,
@@ -218,7 +245,7 @@ class NativeNotificationService {
           },
         },
         trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.DAILY,
+          type: Notifications.SchedulableTriggerInputTypes?.DAILY || 'daily',
           hour: params.hour,
           minute: params.minute,
           channelId: ALARM_CHANNEL_ID,
@@ -237,7 +264,11 @@ class NativeNotificationService {
    * Cancels all scheduled local alarms
    */
   async cancelAllLocalAlarms(): Promise<void> {
-    if (Platform.OS === 'web') return;
+    if (Platform.OS === 'web' || isExpoGo) return;
+
+    const Notifications = await getNotifications();
+    if (!Notifications) return;
+
     try {
       await Notifications.cancelAllScheduledNotificationsAsync();
       console.log('🧹 [NativeNotificationService] All local alarms cancelled.');
