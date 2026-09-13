@@ -40,7 +40,7 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
 
   const handleFilePicked = (file: PickedFile) => {
     setSelectedFile(file);
-    // Auto-populate report title from file name if user hasn't set one
+    // Suggest a default title only if the user hasn't already entered a custom name
     if (!fileName.trim()) {
       const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[_\-+]/g, ' ');
       setFileName(cleanName);
@@ -194,15 +194,24 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
         </View>
       )}
 
-      {/* Step 2: Custom Report Name Input */}
+      {/* Step 2: Custom Report Name Input (Used for searching and traversing) */}
       <View style={{ marginTop: Spacing.two }}>
         <Input
           label="Report Name / Title *"
           placeholder="e.g. Complete Blood Count / Chest X-Ray 2026"
           value={fileName}
           onChangeText={setFileName}
-          helperText="Give your report a descriptive name to easily search and identify it later."
+          helperText="Enter your custom report title. You can traverse and search your reports using this name."
         />
+        {fileName.trim() ? (
+          <Pressable
+            onPress={() => setFileName('')}
+            style={{ alignSelf: 'flex-start', marginTop: -8, marginBottom: 12 }}>
+            <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '600' }}>
+              ✕ Clear name and enter new one
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {/* Step 3: Upload Action Button */}
@@ -211,7 +220,7 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
         onPress={handleUpload}
         loading={uploading}
         disabled={!selectedFile || uploading}
-        style={{ marginTop: Spacing.three }}
+        style={{ marginTop: Spacing.two }}
       />
     </Modal>
   );
