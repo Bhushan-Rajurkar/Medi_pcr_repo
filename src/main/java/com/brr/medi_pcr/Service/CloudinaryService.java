@@ -31,12 +31,12 @@ public class CloudinaryService {
         String folder;
         String resourceType;
 
-        if (contentType.startsWith("image/") || originalFilename.matches(".*\\.(jpg|jpeg|png|webp|gif|bmp|tiff|heic|svg)$")) {
+        if (contentType.startsWith("image/") || contentType.equals("application/pdf") || originalFilename.matches(".*\\.(jpg|jpeg|png|webp|gif|bmp|tiff|heic|svg|pdf)$")) {
             folder = "mediscan-ai/images";
             resourceType = "image";
         } else {
             folder = "mediscan-ai/reports";
-            resourceType = "auto";
+            resourceType = "raw";
         }
 
         return cloudinary.uploader().upload(
@@ -51,6 +51,43 @@ public class CloudinaryService {
                         "overwrite", false
                 )
         );
+    }
+
+    // ==========================
+    // Generate Signed URL (Prevents 401 Unauthorized errors on Cloudinary)
+    // ==========================
+    public String generateSignedUrl(String publicId, String resourceType) {
+        return generateSignedUrl(publicId, resourceType, null);
+    }
+
+    public String generateSignedUrl(String publicId, String resourceType, String originalFilename) {
+        try {
+            if (publicId == null || publicId.isBlank()) return null;
+
+            String resType = (resourceType != null && !resourceType.isBlank()) ? resourceType : "image";
+            var urlBuilder = cloudinary.url()
+                    .resourceType(resType)
+                    .type("upload")
+                    .signed(true)
+                    .secure(true);
+
+            // Extract extension if present
+            String ext = "";
+            if (originalFilename != null && originalFilename.contains(".")) {
+                ext = originalFilename.substring(originalFilename.lastIndexOf(".") + 1).toLowerCase().trim();
+            } else if (publicId.contains(".")) {
+                ext = publicId.substring(publicId.lastIndexOf(".") + 1).toLowerCase().trim();
+            }
+
+            // For image resourceType (including PDF treated as image), specify format if not already in publicId
+            if ("image".equalsIgnoreCase(resType) && !ext.isEmpty() && !publicId.toLowerCase().endsWith("." + ext)) {
+                urlBuilder.format(ext);
+            }
+
+            return urlBuilder.generate(publicId);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     // ==========================
@@ -70,6 +107,5 @@ public class CloudinaryService {
 
         return result;
     }
-
 
 }

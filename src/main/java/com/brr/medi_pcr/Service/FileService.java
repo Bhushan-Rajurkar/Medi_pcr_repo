@@ -66,10 +66,15 @@ public class FileService {
         // Original uploaded filename
         entity.setOriginalFileName(file.getOriginalFilename());
 
+        String publicId = uploadResult.get("public_id").toString();
+        String resType = uploadResult.get("resource_type").toString();
+        String signedUrl = cloudinaryService.generateSignedUrl(publicId, resType, origName);
+        String finalUrl = (signedUrl != null && !signedUrl.isBlank()) ? signedUrl : uploadResult.get("secure_url").toString();
+
         entity.setFileType(file.getContentType());
-        entity.setCloudinaryUrl(uploadResult.get("secure_url").toString());
-        entity.setResourceType(uploadResult.get("resource_type").toString());
-        entity.setPublicId(uploadResult.get("public_id").toString());
+        entity.setCloudinaryUrl(finalUrl);
+        entity.setResourceType(resType);
+        entity.setPublicId(publicId);
         entity.setSize(file.getSize());
         entity.setUploadedAt(LocalDateTime.now());
         entity.setUser(currentUser);

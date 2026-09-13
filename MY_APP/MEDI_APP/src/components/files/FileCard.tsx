@@ -27,6 +27,7 @@ import { downloadFileAsync } from '@/utils/fileSystemHelper';
 import * as Sharing from 'expo-sharing';
 import * as WebBrowser from 'expo-web-browser';
 import { WebPdfViewer } from './WebPdfViewer';
+import { api } from '@/services/api';
 
 interface FileCardProps {
   file: MedicalFile;
@@ -82,6 +83,24 @@ export const FileCard: React.FC<FileCardProps> = ({ file, onDelete }) => {
     return mime.includes('pdf') || orig.endsWith('.pdf');
   };
 
+  const isDocFile = (): boolean => {
+    const orig = (file.originalFileName || '').toLowerCase();
+    const mime = (file.fileType || '').toLowerCase();
+    return (
+      orig.endsWith('.doc') ||
+      orig.endsWith('.docx') ||
+      orig.endsWith('.txt') ||
+      orig.endsWith('.rtf') ||
+      orig.endsWith('.odt') ||
+      orig.endsWith('.csv') ||
+      orig.endsWith('.xls') ||
+      orig.endsWith('.xlsx') ||
+      mime.includes('word') ||
+      mime.includes('officedocument') ||
+      mime.includes('text/plain')
+    );
+  };
+
   const formatFileSize = (bytes: number): string => {
     if (!bytes) return '0 B';
     if (bytes < 1024) return `${bytes} B`;
@@ -108,11 +127,14 @@ export const FileCard: React.FC<FileCardProps> = ({ file, onDelete }) => {
     setPreviewVisible(true);
   };
 
-  // Mobile fallback to open in browser / external viewer
-  const handleOpenExternalViewer = async () => {
-    const targetUrl = file.url || fileService.getViewUrl(file.id);
+  // Mobile / Web fallback to open in browser / external viewer
+  const handleOpenExternalViewer = async (urlOverride?: any) => {
+    const backendViewUrl = fileService.getViewUrl(file.id);
+    const directUrl = file.url;
+    const targetUrl = typeof urlOverride === 'string' ? urlOverride : (backendViewUrl || directUrl);
+
     try {
-      if (Platform.OS === 'web') {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
         window.open(targetUrl, '_blank');
       } else {
         await WebBrowser.openBrowserAsync(targetUrl);
@@ -126,28 +148,78 @@ export const FileCard: React.FC<FileCardProps> = ({ file, onDelete }) => {
   const handleDownload = async () => {
     setDownloading(true);
     const cleanFileName = getCleanFileName();
-    const targetUrl = file.url || fileService.getDownloadUrl(file.id);
+    const backendDownloadUrl = fileService.getDownloadUrl(file.id);
+    const directUrl = file.url;
 
     try {
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        // Fetch as Blob on web to ensure browser saves with exact cleanFileName
-        const res = await fetch(targetUrl);
-        const blob = await res.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = blobUrl;
-        link.download = cleanFileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(blobUrl);
+        // Dual candidate URLs on web: try backend download URL first, fallback to direct
+        let downloaded = false;
+        const candidateUrls = [backendDownloadUrl, directUrl].filter(Boolean) as string[];
+
+        for (const url of candidateUrls) {
+          try {
+            const reqHeaders: Record<string, string> = {};
+            if (!url.includes('cloudinary.com')) {
+              try {
+                const token = api.getToken();
+                if (token) reqHeaders['Authorization'] = `Bearer ${token}`;
+              } catch {}
+            }
+
+            const res = await fetch(url, { headers: reqHeaders });
+            if (res.ok) {
+              const blob = await res.blob();
+              const blobUrl = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = blobUrl;
+              link.download = cleanFileName;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+              downloaded = true;
+              break;
+            }
+          } catch (e) {
+            console.warn(`[FileCard] Web blob fetch failed for ${url}, trying fallback:`, e);
+          }
+        }
+
+        if (!downloaded) {
+          // Fallback via anchor navigation to backend endpoint (streams with attachment header)
+          const fallbackLink = backendDownloadUrl || directUrl;
+          const link = document.createElement('a');
+          link.href = fallbackLink;
+          link.download = cleanFileName;
+          link.target = '_blank';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
       } else {
         // Mobile Android / iOS: download to local cache and prompt native share/save
-        const dlResult = await downloadFileAsync(targetUrl, cleanFileName);
+        const dlResult = await downloadFileAsync(backendDownloadUrl, cleanFileName, undefined, directUrl);
         const canShare = await Sharing.isAvailableAsync();
         if (canShare) {
+          let mimeType = file.fileType || 'application/octet-stream';
+          const lower = cleanFileName.toLowerCase();
+          if (lower.endsWith('.pdf')) {
+            mimeType = 'application/pdf';
+          } else if (lower.endsWith('.docx')) {
+            mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+          } else if (lower.endsWith('.doc')) {
+            mimeType = 'application/msword';
+          } else if (lower.endsWith('.txt')) {
+            mimeType = 'text/plain';
+          } else if (lower.endsWith('.png')) {
+            mimeType = 'image/png';
+          } else if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
+            mimeType = 'image/jpeg';
+          }
+
           await Sharing.shareAsync(dlResult.uri, {
-            mimeType: file.fileType || (isPdfFile() ? 'application/pdf' : 'application/octet-stream'),
+            mimeType,
             dialogTitle: `Save / Share ${cleanFileName}`,
             UTI: isPdfFile() ? 'com.adobe.pdf' : undefined,
           });
@@ -155,10 +227,11 @@ export const FileCard: React.FC<FileCardProps> = ({ file, onDelete }) => {
       }
     } catch (err: any) {
       console.error('Download failed, falling back to direct link:', err);
+      const fallbackLink = backendDownloadUrl || directUrl;
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        window.open(targetUrl, '_blank');
+        window.open(fallbackLink, '_blank');
       } else {
-        Linking.openURL(targetUrl);
+        Linking.openURL(fallbackLink);
       }
     } finally {
       setDownloading(false);
@@ -363,35 +436,64 @@ export const FileCard: React.FC<FileCardProps> = ({ file, onDelete }) => {
                       {getCleanFileName()}
                     </Text>
                     <Text style={[styles.mobileDocSub, { color: colors.textSecondary }]}>
-                      {formatFileSize(file.size)} • PDF Document
+                      {formatFileSize(file.size)} • PDF Medical Report
                     </Text>
                     <View style={styles.mobileDocButtons}>
                       <Button
-                        title="Open in Fullscreen Viewer"
+                        title={downloading ? 'Downloading...' : 'Open & View PDF'}
                         variant="primary"
                         size="md"
-                        icon={<ExternalLinkIcon size={16} color="#FFFFFF" />}
-                        onPress={handleOpenExternalViewer}
+                        loading={downloading}
+                        icon={<FileTextIcon size={16} color="#FFFFFF" />}
+                        onPress={handleDownload}
+                      />
+                      <View style={{ height: Spacing.two }} />
+                      <Button
+                        title="Open in Browser ↗"
+                        variant="outline"
+                        size="md"
+                        icon={<ExternalLinkIcon size={16} color={colors.primary} />}
+                        onPress={() => handleOpenExternalViewer()}
                       />
                     </View>
                   </View>
                 )
               ) : (
                 <View style={styles.mobileDocCard}>
+                  <View style={[styles.docTypeBadge, { backgroundColor: colors.primaryLight }]}>
+                    <Text style={[styles.docTypeBadgeText, { color: colors.primary }]}>
+                      {(file.originalFileName?.split('.').pop() || file.fileType?.split('/').pop() || 'DOC').toUpperCase()}
+                    </Text>
+                  </View>
                   <FileTextIcon size={56} color={colors.primary} />
                   <Text style={[styles.mobileDocTitle, { color: colors.text }]}>
                     {getCleanFileName()}
                   </Text>
                   <Text style={[styles.mobileDocSub, { color: colors.textSecondary }]}>
-                    {formatFileSize(file.size)} • Document
+                    {formatFileSize(file.size)} • Medical Document Report
                   </Text>
-                  <Button
-                    title="Open Document in Viewer"
-                    variant="outline"
-                    size="md"
-                    icon={<ExternalLinkIcon size={16} color={colors.primary} />}
-                    onPress={handleOpenExternalViewer}
-                  />
+                  <View style={styles.mobileDocButtons}>
+                    <Button
+                      title="Open in Online Viewer ↗"
+                      variant="outline"
+                      size="md"
+                      icon={<ExternalLinkIcon size={16} color={colors.primary} />}
+                      onPress={() => {
+                        const directUrl = file.url || fileService.getViewUrl(file.id);
+                        const googleViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(directUrl)}&embedded=true`;
+                        handleOpenExternalViewer(googleViewerUrl);
+                      }}
+                    />
+                    <View style={{ height: Spacing.two }} />
+                    <Button
+                      title={downloading ? 'Downloading...' : 'Download & Open Document'}
+                      variant="primary"
+                      size="md"
+                      loading={downloading}
+                      icon={<DownloadIcon size={16} color="#FFFFFF" />}
+                      onPress={handleDownload}
+                    />
+                  </View>
                 </View>
               )}
             </View>
@@ -584,6 +686,19 @@ const styles = StyleSheet.create({
   },
   mobileDocButtons: {
     marginTop: Spacing.two,
+    width: '100%',
+    maxWidth: 320,
+  },
+  docTypeBadge: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+    marginBottom: Spacing.three,
+  },
+  docTypeBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   previewFooter: {
     flexDirection: 'row',

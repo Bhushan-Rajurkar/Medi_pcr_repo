@@ -23,6 +23,7 @@ import java.util.List;
 public class FileController {
 
     private final FileService fileService;
+    private final CloudinaryService cloudinaryService;
 
     // ==========================
     // Upload File
@@ -89,7 +90,9 @@ public class FileController {
     public ResponseEntity<Resource> downloadFile(@PathVariable Long id) {
         try {
             FileEntity file = fileService.downloadFile(id);
-            Resource resource = new UrlResource(file.getCloudinaryUrl());
+            String signedUrl = cloudinaryService.generateSignedUrl(file.getPublicId(), file.getResourceType(), file.getOriginalFileName());
+            String fileUrl = (signedUrl != null && !signedUrl.isBlank()) ? signedUrl : file.getCloudinaryUrl();
+            Resource resource = new UrlResource(fileUrl);
 
             String origName = file.getOriginalFileName();
             String extension = "";
@@ -113,6 +116,9 @@ public class FileController {
                 if (extension.equalsIgnoreCase(".pdf")) mediaType = MediaType.APPLICATION_PDF;
                 else if (extension.equalsIgnoreCase(".png")) mediaType = MediaType.IMAGE_PNG;
                 else if (extension.equalsIgnoreCase(".jpg") || extension.equalsIgnoreCase(".jpeg")) mediaType = MediaType.IMAGE_JPEG;
+                else if (extension.equalsIgnoreCase(".docx")) mediaType = MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+                else if (extension.equalsIgnoreCase(".doc")) mediaType = MediaType.parseMediaType("application/msword");
+                else if (extension.equalsIgnoreCase(".txt")) mediaType = MediaType.TEXT_PLAIN;
             }
 
             return ResponseEntity.ok()
@@ -134,7 +140,9 @@ public class FileController {
     public ResponseEntity<Resource> viewFile(@PathVariable Long id) {
         try {
             FileEntity file = fileService.downloadFile(id);
-            Resource resource = new UrlResource(file.getCloudinaryUrl());
+            String signedUrl = cloudinaryService.generateSignedUrl(file.getPublicId(), file.getResourceType(), file.getOriginalFileName());
+            String fileUrl = (signedUrl != null && !signedUrl.isBlank()) ? signedUrl : file.getCloudinaryUrl();
+            Resource resource = new UrlResource(fileUrl);
 
             String origName = file.getOriginalFileName();
             String extension = "";
@@ -158,6 +166,9 @@ public class FileController {
                 if (extension.equalsIgnoreCase(".pdf")) mediaType = MediaType.APPLICATION_PDF;
                 else if (extension.equalsIgnoreCase(".png")) mediaType = MediaType.IMAGE_PNG;
                 else if (extension.equalsIgnoreCase(".jpg") || extension.equalsIgnoreCase(".jpeg")) mediaType = MediaType.IMAGE_JPEG;
+                else if (extension.equalsIgnoreCase(".docx")) mediaType = MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+                else if (extension.equalsIgnoreCase(".doc")) mediaType = MediaType.parseMediaType("application/msword");
+                else if (extension.equalsIgnoreCase(".txt")) mediaType = MediaType.TEXT_PLAIN;
             }
 
             return ResponseEntity.ok()

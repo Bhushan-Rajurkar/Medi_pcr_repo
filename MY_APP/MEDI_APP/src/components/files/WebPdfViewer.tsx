@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useAppTheme } from '@/context/ThemeContext';
 import { BorderRadius, Spacing } from '@/constants/theme';
+import { api } from '@/services/api';
 
 interface WebPdfViewerProps {
   primaryUrl: string;
@@ -91,7 +92,14 @@ export const WebPdfViewer: React.FC<WebPdfViewerProps> = ({
 
         for (const targetUrl of candidateUrls) {
           try {
-            const res = await fetch(targetUrl, { mode: 'cors' });
+            const reqHeaders: Record<string, string> = {};
+            if (!targetUrl.includes('cloudinary.com')) {
+              try {
+                const token = api.getToken();
+                if (token) reqHeaders['Authorization'] = `Bearer ${token}`;
+              } catch {}
+            }
+            const res = await fetch(targetUrl, { mode: 'cors', headers: reqHeaders });
             if (res.ok) {
               pdfDataBuffer = await res.arrayBuffer();
               break;

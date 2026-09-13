@@ -91,43 +91,51 @@ export const writeBase64FileAsync = async (fileUriOrName: string, base64Data: st
 export const downloadFileAsync = async (
   remoteUrl: string,
   fileUriOrName: string,
-  headers?: Record<string, string>
+  headers?: Record<string, string>,
+  fallbackUrl?: string
 ): Promise<{ uri: string }> => {
-  try {
-    const file = fileUriOrName.startsWith('file:')
-      ? new File(fileUriOrName)
-      : new File(Paths.cache, fileUriOrName);
+  const candidateUrls = [remoteUrl, fallbackUrl].filter(Boolean) as string[];
+  let lastError: any = null;
 
-    // Prepare auth headers: attach Bearer token ONLY for backend URLs, NOT for Cloudinary
-    const reqHeaders: Record<string, string> = { ...(headers || {}) };
-    const isCloudinary = remoteUrl.includes('cloudinary.com');
-    if (!isCloudinary && !reqHeaders['Authorization']) {
-      try {
-        const token = api.getToken();
-        if (token) {
-          reqHeaders['Authorization'] = `Bearer ${token}`;
-        }
-      } catch {}
-    }
-
+  for (const targetUrl of candidateUrls) {
     try {
-      await File.downloadFileAsync(remoteUrl, file, { idempotent: true, headers: reqHeaders });
-      return { uri: file.uri };
-    } catch (downloadErr) {
-      // Fallback via standard fetch
-      const resp = await fetch(remoteUrl, { headers: reqHeaders });
-      if (!resp.ok) {
-        throw new Error(`Fetch failed with status ${resp.status}`);
+      const file = fileUriOrName.startsWith('file:')
+        ? new File(fileUriOrName)
+        : new File(Paths.cache, fileUriOrName);
+
+      // Prepare auth headers: attach Bearer token ONLY for backend URLs, NOT for Cloudinary
+      const reqHeaders: Record<string, string> = { ...(headers || {}) };
+      const isCloudinary = targetUrl.includes('cloudinary.com');
+      if (!isCloudinary && !reqHeaders['Authorization']) {
+        try {
+          const token = api.getToken();
+          if (token) {
+            reqHeaders['Authorization'] = `Bearer ${token}`;
+          }
+        } catch {}
       }
-      const buffer = await resp.arrayBuffer();
-      if (!file.exists) file.create();
-      file.write(new Uint8Array(buffer));
-      return { uri: file.uri };
+
+      try {
+        await File.downloadFileAsync(targetUrl, file, { idempotent: true, headers: reqHeaders });
+        return { uri: file.uri };
+      } catch (nativeErr) {
+        // Fallback via standard fetch
+        const resp = await fetch(targetUrl, { headers: reqHeaders });
+        if (!resp.ok) {
+          throw new Error(`Fetch failed with status ${resp.status}`);
+        }
+        const buffer = await resp.arrayBuffer();
+        if (!file.exists) file.create();
+        file.write(new Uint8Array(buffer));
+        return { uri: file.uri };
+      }
+    } catch (err: any) {
+      lastError = err;
+      console.warn(`[fileSystemHelper] downloadFileAsync attempt failed for ${targetUrl}:`, err);
     }
-  } catch (err) {
-    console.warn('[fileSystemHelper] downloadFileAsync error:', err);
-    throw err;
   }
+
+  throw lastError || new Error('Download failed from all candidate URLs');
 };
 
 /**
