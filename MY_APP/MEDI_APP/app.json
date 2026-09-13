@@ -49,7 +49,8 @@
           "color": "#208AEF",
           "defaultChannel": "medicine-reminder-alarm"
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true,

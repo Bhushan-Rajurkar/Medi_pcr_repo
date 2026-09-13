@@ -8,6 +8,7 @@ import {
   TextInput,
   ActivityIndicator,
   Modal,
+  Platform,
   useWindowDimensions,
 } from 'react-native';
 import { useAppTheme } from '@/context/ThemeContext';
@@ -170,32 +171,58 @@ export const DietChatbotModal: React.FC<DietChatbotModalProps> = ({
     }, 150);
   };
 
-  const downloadPlanFile = (plan?: StructuredDietPlanResult, category?: string) => {
-    if (!plan || typeof window === 'undefined') return;
+  const downloadPlanFile = async (plan?: StructuredDietPlanResult, category?: string) => {
+    if (!plan) return;
     const cleanCategory = (category || plan.category || 'Plan').replace(/\s+/g, '_');
+    const fileName = `Medi_AI_7_Day_Plan_${cleanCategory}.html`;
     const html = aiDietService.generatePlanPdfHtml(plan);
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Medi_AI_7_Day_Plan_${cleanCategory}.html`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } else {
+      try {
+        const FileSystem = require('expo-file-system');
+        const Sharing = require('expo-sharing');
+        const fileUri = `${FileSystem.cacheDirectory || FileSystem.documentDirectory}${fileName}`;
+        await FileSystem.writeAsStringAsync(fileUri, html, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: 'text/html',
+            dialogTitle: 'Save / Share Diet Plan',
+            UTI: 'public.html',
+          });
+        }
+      } catch (err) {
+        console.error('Failed to download/share diet plan on mobile:', err);
+      }
+    }
   };
 
   const printOrSavePdf = (plan?: StructuredDietPlanResult, category?: string) => {
-    if (!plan || typeof window === 'undefined') return;
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert('Please allow popups in your browser to download / print your plan as PDF.');
-      return;
+    if (!plan) return;
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        alert('Please allow popups in your browser to download / print your plan as PDF.');
+        return;
+      }
+      const fullHtml = aiDietService.generatePlanPdfHtml(plan);
+      printWindow.document.write(fullHtml);
+      printWindow.document.close();
+    } else {
+      // On mobile, trigger file download/share
+      downloadPlanFile(plan, category);
     }
-
-    const fullHtml = aiDietService.generatePlanPdfHtml(plan);
-    printWindow.document.write(fullHtml);
-    printWindow.document.close();
   };
 
   const handleGeneratePlan = async () => {

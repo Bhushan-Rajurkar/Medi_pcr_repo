@@ -47,19 +47,40 @@ export const PublicEmergencyModal: React.FC<PublicEmergencyModalProps> = ({
     const emergencyUrl = profile.emergencyViewUrl || '';
     if (!emergencyUrl) return;
 
-    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && (navigator as any).share) {
-      try {
-        await (navigator as any).share({
+    const shareMessage = `Emergency medical information for ${profile.name}:\n${emergencyUrl}`;
+
+    try {
+      if (Platform.OS === 'web') {
+        if (typeof navigator !== 'undefined' && (navigator as any).share) {
+          await (navigator as any).share({
+            title: `Emergency Medical Card - ${profile.name}`,
+            text: shareMessage,
+            url: emergencyUrl,
+          });
+          return;
+        }
+      } else {
+        const { Share: RNShare } = require('react-native');
+        await RNShare.share({
           title: `Emergency Medical Card - ${profile.name}`,
-          text: `Emergency medical information for ${profile.name}:`,
+          message: shareMessage,
           url: emergencyUrl,
         });
-      } catch (e) {
-        // ignore
+        return;
       }
-    } else if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
-      navigator.clipboard.writeText(emergencyUrl);
+    } catch {
+      // ignore
+    }
+
+    try {
+      const Clipboard = require('expo-clipboard');
+      await Clipboard.setStringAsync(emergencyUrl);
       alert('Emergency card URL copied to clipboard!');
+    } catch {
+      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+        navigator.clipboard.writeText(emergencyUrl);
+        alert('Emergency card URL copied to clipboard!');
+      }
     }
   };
 

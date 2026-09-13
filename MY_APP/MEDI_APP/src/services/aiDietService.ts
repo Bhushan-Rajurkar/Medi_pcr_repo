@@ -200,9 +200,13 @@ export interface ChatMessage {
 
 class AiDietService {
   private getApiKey(): string {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('medi_pcr_gemini_api_key');
-      if (stored && stored.trim()) return stored.trim();
+    if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
+      try {
+        const stored = window.localStorage.getItem('medi_pcr_gemini_api_key');
+        if (stored && stored.trim()) return stored.trim();
+      } catch {
+        // Ignore localStorage errors on restricted environments
+      }
     }
     return DEFAULT_GEMINI_KEY;
   }

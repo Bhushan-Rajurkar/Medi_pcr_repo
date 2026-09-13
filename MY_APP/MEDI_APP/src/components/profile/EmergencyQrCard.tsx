@@ -54,51 +54,112 @@ export const EmergencyQrCard: React.FC<EmergencyQrCardProps> = ({
       return;
     }
 
-    const shareData = {
-      title: `Emergency Medical ID - ${profile?.name || 'Medi-PCR'}`,
-      text: `Scan or open this link in an emergency for vital medical info, allergies, and contacts for ${profile?.name || 'Patient'}:`,
-      url: emergencyUrl,
-    };
+    const shareMessage = `Emergency Medical ID for ${profile?.name || 'Patient'}:\n${emergencyUrl}\nScan or open this link in an emergency for vital medical info, allergies, and contacts.`;
 
-    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && (navigator as any).share) {
-      try {
-        await (navigator as any).share(shareData);
-        setToast({ id: 'shared', type: 'success', message: 'Emergency QR link shared!' });
-      } catch (err: any) {
-        if (err.name !== 'AbortError') {
-          copyToClipboard(emergencyUrl);
+    try {
+      if (Platform.OS === 'web') {
+        if (typeof navigator !== 'undefined' && (navigator as any).share) {
+          await (navigator as any).share({
+            title: `Emergency Medical ID - ${profile?.name || 'Medi-PCR'}`,
+            text: shareMessage,
+            url: emergencyUrl,
+          });
+          setToast({ id: 'shared', type: 'success', message: 'Emergency QR link shared!' });
+          return;
+        }
+      } else {
+        // Native Android & iOS share
+        const { Share: RNShare } = require('react-native');
+        const result = await RNShare.share({
+          title: `Emergency Medical ID - ${profile?.name || 'Medi-PCR'}`,
+          message: shareMessage,
+          url: emergencyUrl,
+        });
+        if (result.action === RNShare.sharedAction) {
+          setToast({ id: 'shared', type: 'success', message: 'Emergency QR link shared!' });
+          return;
         }
       }
-    } else {
-      copyToClipboard(emergencyUrl);
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') {
+        console.log('Share dismissed or failed, falling back to copy:', err);
+      }
     }
+
+    // Fallback if sharing is cancelled or unavailable
+    await copyToClipboard(emergencyUrl);
   };
 
-  const copyToClipboard = (text: string) => {
-    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
-      navigator.clipboard.writeText(text);
+  const copyToClipboard = async (text: string) => {
+    try {
+      const Clipboard = require('expo-clipboard');
+      await Clipboard.setStringAsync(text);
       setToast({ id: 'copied', type: 'success', message: 'Emergency link copied to clipboard!' });
-    } else {
-      setToast({ id: 'copied', type: 'info', message: `Emergency Link: ${text}` });
+      return;
+    } catch (e) {
+      // Fallback for Web if expo-clipboard fails
+      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+        try {
+          await navigator.clipboard.writeText(text);
+          setToast({ id: 'copied', type: 'success', message: 'Emergency link copied to clipboard!' });
+          return;
+        } catch {}
+      }
     }
+    setToast({ id: 'copied', type: 'info', message: `Emergency Link: ${text}` });
   };
 
-  // Handle Download QR Image
-  const handleDownload = () => {
-    if (!profile?.qrCodeDataUrl) return;
+  // Handle Download QR Image (Android, iOS & Web)
+  const handleDownload = async () => {
+    if (!profile?.qrCodeDataUrl && !profile?.qrCodeToken) return;
 
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      const link = document.createElement('a');
-      link.href = profile.qrCodeDataUrl;
-      link.download = `emergency_qr_${profile.name ? profile.name.replace(/\s+/g, '_') : 'patient'}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setToast({ id: 'dl_ok', type: 'success', message: 'QR Code image downloaded!' });
-    } else if (profile.qrCodeToken) {
-      const imgUrl = profileService.getQrImageUrl(profile.qrCodeToken);
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    const patientSlug = profile?.name ? profile.name.replace(/\s+/g, '_') : 'patient';
+    const fileName = `emergency_qr_${patientSlug}.png`;
+
+    if (Platform.OS === 'web') {
+      if (profile.qrCodeDataUrl && typeof document !== 'undefined') {
+        const link = document.createElement('a');
+        link.href = profile.qrCodeDataUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setToast({ id: 'dl_ok', type: 'success', message: 'QR Code image downloaded!' });
+      } else if (profile.qrCodeToken && typeof window !== 'undefined') {
+        const imgUrl = profileService.getQrImageUrl(profile.qrCodeToken);
         window.open(imgUrl, '_blank');
+      }
+    } else {
+      // Android / iOS Download & Share to Gallery / Files
+      try {
+        const FileSystem = require('expo-file-system');
+        const Sharing = require('expo-sharing');
+        const fileUri = `${FileSystem.cacheDirectory || FileSystem.documentDirectory}${fileName}`;
+
+        if (profile.qrCodeDataUrl && profile.qrCodeDataUrl.startsWith('data:image')) {
+          // Extract base64 payload
+          const base64Data = profile.qrCodeDataUrl.split(',')[1];
+          await FileSystem.writeAsStringAsync(fileUri, base64Data, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+        } else if (profile.qrCodeToken) {
+          const imgUrl = profileService.getQrImageUrl(profile.qrCodeToken);
+          await FileSystem.downloadAsync(imgUrl, fileUri);
+        }
+
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: 'image/png',
+            dialogTitle: 'Save / Share Emergency QR Code',
+            UTI: 'public.png',
+          });
+          setToast({ id: 'dl_ok', type: 'success', message: 'QR Code ready to save or share!' });
+        } else {
+          setToast({ id: 'dl_ok', type: 'success', message: 'QR Code saved to device cache!' });
+        }
+      } catch (err: any) {
+        console.error('Failed to download QR code on device:', err);
+        setToast({ id: 'dl_err', type: 'error', message: 'Could not download QR image on this device.' });
       }
     }
   };
