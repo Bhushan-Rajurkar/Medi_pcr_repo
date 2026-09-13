@@ -26,6 +26,7 @@ import {
 import { downloadFileAsync } from '@/utils/fileSystemHelper';
 import * as Sharing from 'expo-sharing';
 import * as WebBrowser from 'expo-web-browser';
+import { WebPdfViewer } from './WebPdfViewer';
 
 interface FileCardProps {
   file: MedicalFile;
@@ -347,28 +348,13 @@ export const FileCard: React.FC<FileCardProps> = ({ file, onDelete }) => {
               ) : isPdfFile() ? (
                 Platform.OS === 'web' ? (
                   <View style={styles.webPdfWrapper}>
-                    <iframe
-                      src={`https://docs.google.com/viewer?url=${encodeURIComponent(
-                        file.url || fileService.getViewUrl(file.id)
-                      )}&embedded=true`}
-                      style={{
-                        width: '100%',
-                        height: Math.min(windowHeight * 0.68, 560),
-                        border: 'none',
-                        borderRadius: 6,
-                      }}
-                      title={file.fileName}
+                    <WebPdfViewer
+                      primaryUrl={fileService.getViewUrl(file.id)}
+                      fallbackUrl={file.url}
+                      fileName={getCleanFileName()}
+                      onOpenExternal={handleOpenExternalViewer}
+                      onDownload={handleDownload}
                     />
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, paddingHorizontal: 4 }}>
-                      <Text style={{ fontSize: 11, color: colors.textSecondary }}>
-                        Trouble viewing document inline?
-                      </Text>
-                      <Pressable
-                        onPress={handleOpenExternalViewer}
-                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <Text style={{ fontSize: 11, color: colors.primary, fontWeight: '600' }}>Open in New Window ↗</Text>
-                      </Pressable>
-                    </View>
                   </View>
                 ) : (
                   <View style={styles.mobileDocCard}>
