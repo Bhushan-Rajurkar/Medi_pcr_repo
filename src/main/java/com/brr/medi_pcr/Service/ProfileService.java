@@ -54,7 +54,7 @@ public class ProfileService {
     /**
      * Retrieve current user's profile or an initialized template if not yet created.
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public ProfileDtos.ProfileResponseDto getProfileByUserEmail(String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
@@ -216,6 +216,18 @@ public class ProfileService {
         User user = profile.getUser();
         String token = profile.getQrCodeToken();
 
+        String qrDataUrl = profile.getQrCodeDataUrl();
+        if ((qrDataUrl == null || !qrDataUrl.startsWith("data:image/")) && token != null && !token.trim().isEmpty()) {
+            try {
+                String emergencyLink = buildEmergencyViewUrl(token);
+                qrDataUrl = qrCodeUtil.generateQrCodeBase64(emergencyLink);
+                profile.setQrCodeDataUrl(qrDataUrl);
+                profileRepository.save(profile);
+            } catch (Exception e) {
+                log.warn("Failed to auto-heal QR data URL for token {}: {}", token, e.getMessage());
+            }
+        }
+
         return ProfileDtos.ProfileResponseDto.builder()
                 .id(profile.getId())
                 .userId(user != null ? user.getId() : null)
@@ -237,7 +249,7 @@ public class ProfileService {
                 .bloodGroup(profile.getBloodGroup())
                 .allergies(profile.getAllergies() != null ? new ArrayList<>(profile.getAllergies()) : new ArrayList<>())
                 .qrCodeToken(token)
-                .qrCodeDataUrl(profile.getQrCodeDataUrl())
+                .qrCodeDataUrl(qrDataUrl)
                 .publicProfileUrl(token != null ? buildPublicProfileApiUrl(token) : null)
                 .emergencyViewUrl(token != null ? buildEmergencyViewUrl(token) : null)
                 .isComplete(profile.isComplete())

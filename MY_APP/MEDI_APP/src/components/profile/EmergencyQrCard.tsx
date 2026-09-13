@@ -41,9 +41,23 @@ export const EmergencyQrCard: React.FC<EmergencyQrCardProps> = ({
   const { isSmallMobile, isMobile } = useResponsive();
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [regenerating, setRegenerating] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
+
+  const token = profile?.qrCodeToken;
+  const directImageUrl = token ? profileService.getQrImageUrl(token) : '';
+  const hasValidDataUrl = Boolean(
+    profile?.qrCodeDataUrl && profile.qrCodeDataUrl.startsWith('data:image/')
+  );
+
+  // If data URL is valid and hasn't failed, use it. Otherwise use the direct backend PNG URL.
+  const qrDisplayUrl =
+    !imageFailed && hasValidDataUrl
+      ? profile!.qrCodeDataUrl!
+      : (directImageUrl || profile?.qrCodeDataUrl || '');
+
   const isComplete = Boolean(
-    (profile?.isComplete || profile?.complete || !!profile?.qrCodeDataUrl) &&
-    profile?.qrCodeDataUrl
+    (profile?.isComplete || profile?.complete || !!profile?.qrCodeDataUrl || !!profile?.qrCodeToken) &&
+    (profile?.qrCodeDataUrl || profile?.qrCodeToken)
   );
   const emergencyUrl =
     profile?.emergencyViewUrl ||
@@ -56,13 +70,14 @@ export const EmergencyQrCard: React.FC<EmergencyQrCardProps> = ({
       return;
     }
 
+    const shareTitle = `Emergency Medical ID - ${profile?.name || 'Medi-PCR'}`;
     const shareMessage = `Emergency Medical ID for ${profile?.name || 'Patient'}:\n${emergencyUrl}\nScan or open this link in an emergency for vital medical info, allergies, and contacts.`;
 
     try {
       if (Platform.OS === 'web') {
         if (typeof navigator !== 'undefined' && (navigator as any).share) {
           await (navigator as any).share({
-            title: `Emergency Medical ID - ${profile?.name || 'Medi-PCR'}`,
+            title: shareTitle,
             text: shareMessage,
             url: emergencyUrl,
           });
@@ -73,7 +88,7 @@ export const EmergencyQrCard: React.FC<EmergencyQrCardProps> = ({
         // Native Android & iOS share
         const { Share: RNShare } = require('react-native');
         const result = await RNShare.share({
-          title: `Emergency Medical ID - ${profile?.name || 'Medi-PCR'}`,
+          title: shareTitle,
           message: shareMessage,
           url: emergencyUrl,
         });
@@ -83,70 +98,117 @@ export const EmergencyQrCard: React.FC<EmergencyQrCardProps> = ({
         }
       }
     } catch (err: any) {
-      if (err?.name !== 'AbortError') {
-        console.log('Share dismissed or failed, falling back to copy:', err);
-      }
+      if (err?.name === 'AbortError') return;
+      console.log('Share dismissed or failed, falling back to copy:', err);
     }
 
     // Fallback if sharing is cancelled or unavailable
     await copyToClipboard(emergencyUrl);
   };
 
+  // Robust universal clipboard copy (Mobile Web, Desktop Web, Native App)
   const copyToClipboard = async (text: string) => {
-    try {
-      const Clipboard = require('expo-clipboard');
-      await Clipboard.setStringAsync(text);
-      setToast({ id: 'copied', type: 'success', message: 'Emergency link copied to clipboard!' });
+    if (!text) {
+      setToast({ id: 'no_txt', type: 'error', message: 'No link to copy' });
       return;
-    } catch (e) {
-      // Fallback for Web if expo-clipboard fails
-      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
-        try {
-          await navigator.clipboard.writeText(text);
-          setToast({ id: 'copied', type: 'success', message: 'Emergency link copied to clipboard!' });
-          return;
-        } catch {}
+    }
+
+    let copied = false;
+
+    // 1. Try legacy document.execCommand('copy') which works everywhere on Web (HTTP, HTTPS, mobile Chrome, Safari)
+    if (typeof document !== 'undefined') {
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.top = '0';
+        textArea.style.left = '-9999px';
+        textArea.style.opacity = '0';
+        textArea.setAttribute('readonly', '');
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        textArea.setSelectionRange(0, 99999);
+        copied = document.execCommand('copy');
+        document.body.removeChild(textArea);
+      } catch (_) {
+        copied = false;
       }
     }
-    setToast({ id: 'copied', type: 'info', message: `Emergency Link: ${text}` });
+
+    // 2. Try modern navigator.clipboard (works on HTTPS/secure contexts)
+    if (!copied && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      } catch (_) {}
+    }
+
+    // 3. Try expo-clipboard (native iOS & Android apps)
+    if (!copied && Platform.OS !== 'web') {
+      try {
+        const Clipboard = require('expo-clipboard');
+        await Clipboard.setStringAsync(text);
+        copied = true;
+      } catch (_) {}
+    }
+
+    if (copied) {
+      setToast({ id: 'copied', type: 'success', message: 'Emergency QR link copied to clipboard!' });
+    } else {
+      setToast({ id: 'copied', type: 'info', message: `Emergency Link: ${text}` });
+    }
   };
 
   // Handle Download QR Image (Android, iOS & Web)
   const handleDownload = async () => {
-    if (!profile?.qrCodeDataUrl && !profile?.qrCodeToken) return;
+    const downloadSource = qrDisplayUrl || directImageUrl;
+    if (!downloadSource) {
+      setToast({ id: 'no_qr', type: 'error', message: 'QR Code image not available to download' });
+      return;
+    }
 
     const patientSlug = profile?.name ? profile.name.replace(/\s+/g, '_') : 'patient';
     const fileName = `emergency_qr_${patientSlug}.png`;
 
     if (Platform.OS === 'web') {
-      if (profile.qrCodeDataUrl && typeof document !== 'undefined') {
+      try {
+        // Method A: Fetch blob and download via Object URL
+        const res = await fetch(downloadSource);
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
         const link = document.createElement('a');
-        link.href = profile.qrCodeDataUrl;
+        link.href = blobUrl;
         link.download = fileName;
+        link.target = '_blank';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 3000);
         setToast({ id: 'dl_ok', type: 'success', message: 'QR Code image downloaded!' });
-      } else if (profile.qrCodeToken && typeof window !== 'undefined') {
-        const imgUrl = profileService.getQrImageUrl(profile.qrCodeToken);
-        window.open(imgUrl, '_blank');
+        return;
+      } catch (e) {
+        // Method B fallback on mobile web: open direct image endpoint in new tab
+        if (directImageUrl && typeof window !== 'undefined') {
+          window.open(directImageUrl, '_blank');
+          setToast({ id: 'dl_ok', type: 'info', message: 'Opening QR Code image in new tab to save...' });
+          return;
+        }
       }
     } else {
-      // Android / iOS Download & Share to Gallery / Files
+      // Native Android / iOS
       try {
         const FileSystem = require('expo-file-system');
         const Sharing = require('expo-sharing');
         const fileUri = `${FileSystem.cacheDirectory || FileSystem.documentDirectory}${fileName}`;
 
-        if (profile.qrCodeDataUrl && profile.qrCodeDataUrl.startsWith('data:image')) {
-          // Extract base64 payload
-          const base64Data = profile.qrCodeDataUrl.split(',')[1];
+        if (downloadSource.startsWith('data:image/')) {
+          const base64Data = downloadSource.split(',')[1];
           await FileSystem.writeAsStringAsync(fileUri, base64Data, {
             encoding: FileSystem.EncodingType.Base64,
           });
-        } else if (profile.qrCodeToken) {
-          const imgUrl = profileService.getQrImageUrl(profile.qrCodeToken);
-          await FileSystem.downloadAsync(imgUrl, fileUri);
+        } else {
+          await FileSystem.downloadAsync(downloadSource, fileUri);
         }
 
         if (await Sharing.isAvailableAsync()) {
@@ -159,6 +221,7 @@ export const EmergencyQrCard: React.FC<EmergencyQrCardProps> = ({
         } else {
           setToast({ id: 'dl_ok', type: 'success', message: 'QR Code saved to device cache!' });
         }
+        return;
       } catch (err: any) {
         console.error('Failed to download QR code on device:', err);
         setToast({ id: 'dl_err', type: 'error', message: 'Could not download QR image on this device.' });
@@ -240,7 +303,7 @@ export const EmergencyQrCard: React.FC<EmergencyQrCardProps> = ({
       </View>
 
       {/* Content Area */}
-      {isComplete && profile?.qrCodeDataUrl ? (
+      {isComplete && (profile?.qrCodeDataUrl || profile?.qrCodeToken) ? (
         <View style={styles.contentBody}>
           {/* QR Visual Card */}
           <View style={styles.qrVisualSection}>
@@ -253,9 +316,13 @@ export const EmergencyQrCard: React.FC<EmergencyQrCardProps> = ({
                 },
               ]}>
               <Image
-                source={{ uri: profile.qrCodeDataUrl }}
+                source={{ uri: qrDisplayUrl }}
                 style={styles.qrImage}
                 resizeMode="contain"
+                onError={() => {
+                  console.warn('QR image failed to render, switching to backend PNG endpoint');
+                  setImageFailed(true);
+                }}
               />
               <View style={styles.qrScanInstruction}>
                 <Text style={styles.scanLabel}>MEDI-PCR EMERGENCY ID</Text>
