@@ -759,6 +759,22 @@ Ensure all 7 days (Monday through Sunday) are fully populated in weeklyDiet. Kee
   </style>
 </head>
 <body>
+  <!-- Interactive Top Action Bar (hidden when printed / saved to PDF) -->
+  <div class="no-print" style="background:#0F172A; color:#FFFFFF; padding:10px 16px; margin:-15px -15px 15px -15px; display:flex; justify-content:space-between; align-items:center; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
+    <div style="font-weight:700; font-size:13px; display:flex; align-items:center; gap:8px;">
+      <span>🍽️ Medi-PCR Clinical Diet & Fitness Plan</span>
+      <span style="background:#0284C7; font-size:10px; padding:2px 8px; border-radius:4px; font-weight:800;">PDF READY</span>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button onclick="window.print()" style="background:#0284C7; color:#FFFFFF; border:none; padding:7px 16px; border-radius:6px; font-weight:700; font-size:12px; cursor:pointer;">
+        🖨️ Save as PDF / Print
+      </button>
+      <button onclick="window.close()" style="background:#475569; color:#FFFFFF; border:none; padding:7px 12px; border-radius:6px; font-weight:600; font-size:12px; cursor:pointer;">
+        ✕ Close
+      </button>
+    </div>
+  </div>
+
   <!-- Header -->
   <div class="header-bar">
     <div>

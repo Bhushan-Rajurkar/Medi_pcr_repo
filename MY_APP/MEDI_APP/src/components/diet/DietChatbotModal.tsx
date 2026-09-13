@@ -212,35 +212,44 @@ export const DietChatbotModal: React.FC<DietChatbotModalProps> = ({
 
     if (Platform.OS === 'web') {
       try {
-        await Print.printAsync({ html });
-      } catch {
         if (typeof window !== 'undefined') {
           const printWindow = window.open('', '_blank');
           if (printWindow) {
+            printWindow.document.open();
             printWindow.document.write(html);
             printWindow.document.close();
             setTimeout(() => {
-              printWindow.focus();
-              printWindow.print();
-            }, 300);
+              try {
+                printWindow.focus();
+                printWindow.print();
+              } catch {}
+            }, 350);
+            return;
           }
         }
+        await Print.printAsync({ html });
+      } catch (err) {
+        console.warn('Web print error:', err);
+        try {
+          await Print.printAsync({ html });
+        } catch {}
       }
     } else {
       try {
-        // Generates an actual, human-readable PDF file on Android & iOS using root cache permissions
+        // Generates an actual, human-readable PDF file on Android & iOS
         const { uri, base64 } = await Print.printToFileAsync({ html, base64: true });
         const safeUri = await saveAndSharePdfAsync(base64 || uri, `${cleanCategory}_Diet_Plan_${Date.now()}.pdf`);
         const canShare = await Sharing.isAvailableAsync();
         if (canShare) {
           await Sharing.shareAsync(safeUri, {
             mimeType: 'application/pdf',
-            dialogTitle: `Save / Share Medi-AI Diet Plan (${cleanCategory})`,
+            dialogTitle: `Save / Download Medi-AI Diet Plan (${cleanCategory})`,
             UTI: 'com.adobe.pdf',
           });
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to download/share diet plan PDF on mobile:', err);
+        alert('Could not download PDF: ' + (err?.message || 'Error generating PDF file'));
       }
     }
   };
@@ -657,6 +666,18 @@ export const DietChatbotModal: React.FC<DietChatbotModalProps> = ({
                   {/* Actions Row */}
                   <View style={[styles.savedActionRow, { borderTopColor: colors.border }]}>
                     <Pressable
+                      onPress={() => downloadPlanFile(saved.plan, saved.category)}
+                      style={[
+                        styles.savedActionBtn,
+                        { backgroundColor: colors.primary },
+                      ]}>
+                      <DownloadIcon size={13} color="#FFFFFF" />
+                      <Text style={[styles.savedActionBtnText, { color: '#FFFFFF' }]}>
+                        Download PDF
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
                       onPress={() => setExpandedSavedPlanId(isExpanded ? null : saved.id)}
                       style={[
                         styles.savedActionBtn,
@@ -891,7 +912,7 @@ export const DietChatbotModal: React.FC<DietChatbotModalProps> = ({
                             borderColor: colors.border,
                           },
                         ]}>
-                        {/* Header with Classification Badge & Collapse/Show Tables Toggle */}
+                        {/* Header with Classification Badge, Download PDF & Collapse/Show Tables Toggle */}
                         <View style={styles.planCardHeader}>
                           <View
                             style={[
@@ -911,20 +932,37 @@ export const DietChatbotModal: React.FC<DietChatbotModalProps> = ({
                             </Text>
                           </View>
 
-                          <Pressable
-                            onPress={() => toggleTablePreview(msg.id)}
-                            style={[
-                              styles.actionBtn,
-                              {
-                                backgroundColor: isDark ? colors.surfaceHighlight : '#F8FAFC',
-                                borderColor: colors.border,
-                              },
-                            ]}>
-                            <Text style={{ fontSize: 13 }}>{tablePreviewOpen[msg.id] === false ? '👁️' : '🙈'}</Text>
-                            <Text style={[styles.actionBtnText, { color: colors.text }]}>
-                              {tablePreviewOpen[msg.id] === false ? 'Show Tables' : 'Collapse Tables'}
-                            </Text>
-                          </Pressable>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.two }}>
+                            <Pressable
+                              onPress={() => downloadPlanFile(msg.planData, msg.dietCategory)}
+                              style={[
+                                styles.actionBtn,
+                                {
+                                  backgroundColor: colors.primary,
+                                  borderColor: colors.primary,
+                                },
+                              ]}>
+                              <DownloadIcon size={14} color="#FFFFFF" />
+                              <Text style={[styles.actionBtnText, { color: '#FFFFFF', fontWeight: '700' }]}>
+                                Download PDF
+                              </Text>
+                            </Pressable>
+
+                            <Pressable
+                              onPress={() => toggleTablePreview(msg.id)}
+                              style={[
+                                styles.actionBtn,
+                                {
+                                  backgroundColor: isDark ? colors.surfaceHighlight : '#F8FAFC',
+                                  borderColor: colors.border,
+                                },
+                              ]}>
+                              <Text style={{ fontSize: 13 }}>{tablePreviewOpen[msg.id] === false ? '👁️' : '🙈'}</Text>
+                              <Text style={[styles.actionBtnText, { color: colors.text }]}>
+                                {tablePreviewOpen[msg.id] === false ? 'Show Tables' : 'Collapse Tables'}
+                              </Text>
+                            </Pressable>
+                          </View>
                         </View>
 
                         {/* In-app Table Preview (Visible by default in human-readable tabular format) */}
