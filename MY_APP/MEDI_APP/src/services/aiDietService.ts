@@ -320,7 +320,7 @@ You must return a strictly valid JSON object matching this exact schema:
   ]
 }
 
-Ensure all 7 days (Monday through Sunday) are fully populated in both weeklyDiet and weeklyExercise.
+Ensure all 7 days (Monday through Sunday) are fully populated in weeklyDiet. Keep meal items and exercise instructions concise (under 10 words each) so the output fits cleanly.
 `;
 
     const payload = {
@@ -332,11 +332,11 @@ Ensure all 7 days (Monday through Sunday) are fully populated in both weeklyDiet
       generationConfig: {
         responseMimeType: 'application/json',
         temperature: 0.2,
-        maxOutputTokens: 5000,
+        maxOutputTokens: 8192,
       },
     };
 
-    const models = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+    const models = ['gemini-2.5-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'];
     let lastError: any = null;
 
     for (const model of models) {
@@ -353,17 +353,28 @@ Ensure all 7 days (Monday through Sunday) are fully populated in both weeklyDiet
           throw new Error(data.error.message || `Gemini ${model} request failed`);
         }
 
-        const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        const candidate = data.candidates?.[0];
+        if (candidate?.finishReason === 'MAX_TOKENS') {
+          throw new Error(`Gemini ${model} response was truncated by token limit.`);
+        }
+
+        const generatedText = candidate?.content?.parts?.[0]?.text;
         if (!generatedText) {
           throw new Error('No diet plan was returned from the AI model.');
         }
 
-        // Clean any accidental markdown json fencing
-        const cleanJson = generatedText
+        // Clean any accidental markdown json fencing or outside text
+        let cleanJson = generatedText
           .replace(/^```json\s*/i, '')
           .replace(/^```\s*/i, '')
           .replace(/\s*```$/i, '')
           .trim();
+
+        const firstBrace = cleanJson.indexOf('{');
+        const lastBrace = cleanJson.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+          cleanJson = cleanJson.slice(firstBrace, lastBrace + 1);
+        }
 
         const parsed: StructuredDietPlanResult = JSON.parse(cleanJson);
         parsed.category = category;

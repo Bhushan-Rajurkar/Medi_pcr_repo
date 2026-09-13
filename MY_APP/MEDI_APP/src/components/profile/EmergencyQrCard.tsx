@@ -23,6 +23,7 @@ import {
   ShieldCheckIcon,
   AlertTriangleIcon,
 } from '@/components/common/Icons';
+import { getSafeDirectory, writeBase64FileAsync, downloadFileAsync } from '@/utils/fileSystemHelper';
 
 interface EmergencyQrCardProps {
   profile: EmergencyProfile | null;
@@ -198,17 +199,15 @@ export const EmergencyQrCard: React.FC<EmergencyQrCardProps> = ({
     } else {
       // Native Android / iOS
       try {
-        const FileSystem = require('expo-file-system');
         const Sharing = require('expo-sharing');
-        const fileUri = `${FileSystem.cacheDirectory || FileSystem.documentDirectory}${fileName}`;
+        const dir = getSafeDirectory();
+        const fileUri = `${dir}${fileName}`;
 
         if (downloadSource.startsWith('data:image/')) {
           const base64Data = downloadSource.split(',')[1];
-          await FileSystem.writeAsStringAsync(fileUri, base64Data, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
+          await writeBase64FileAsync(fileUri, base64Data);
         } else {
-          await FileSystem.downloadAsync(downloadSource, fileUri);
+          await downloadFileAsync(downloadSource, fileUri);
         }
 
         if (await Sharing.isAvailableAsync()) {

@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import { readFileAsBase64Async } from './fileSystemHelper';
 
 export interface PickedFile {
   uri: string;
@@ -209,10 +210,7 @@ export const filePicker = {
       type: pickedFile.mimeType || 'application/octet-stream',
       bytes: async () => {
         try {
-          const FileSystem = require('expo-file-system');
-          const base64 = await FileSystem.readAsStringAsync(pickedFile.uri, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
+          const base64 = await readFileAsBase64Async(pickedFile.uri);
           const binaryString = atob(base64);
           const len = binaryString.length;
           const bytes = new Uint8Array(len);

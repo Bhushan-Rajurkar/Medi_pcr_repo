@@ -206,7 +206,7 @@ export const geminiService = {
     };
 
     // Try primary model and fallbacks if needed
-    const candidateModels = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.0-flash'];
+    const candidateModels = ['gemini-2.5-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'];
     let lastError: any = null;
     let data: any = null;
 

@@ -31,6 +31,7 @@ import {
   DownloadIcon,
   FileTextIcon,
 } from '@/components/common/Icons';
+import { getSafeDirectory, writeTextFileAsync } from '@/utils/fileSystemHelper';
 
 interface DietChatbotModalProps {
   visible: boolean;
@@ -189,12 +190,10 @@ export const DietChatbotModal: React.FC<DietChatbotModalProps> = ({
       URL.revokeObjectURL(url);
     } else {
       try {
-        const FileSystem = require('expo-file-system');
         const Sharing = require('expo-sharing');
-        const fileUri = `${FileSystem.cacheDirectory || FileSystem.documentDirectory}${fileName}`;
-        await FileSystem.writeAsStringAsync(fileUri, html, {
-          encoding: FileSystem.EncodingType.UTF8,
-        });
+        const dir = getSafeDirectory();
+        const fileUri = `${dir}${fileName}`;
+        await writeTextFileAsync(fileUri, html);
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(fileUri, {
             mimeType: 'text/html',
