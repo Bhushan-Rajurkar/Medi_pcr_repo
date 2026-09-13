@@ -242,24 +242,96 @@ class ApiClient {
     return this.handleResponse<T>(response);
   }
 
-  public async postMultipart<T>(path: string, formData: FormData): Promise<T> {
+  private async sendMultipart<T>(method: 'POST' | 'PUT', path: string, formData: FormData): Promise<T> {
     const url = `${this.baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+
+    if (Platform.OS !== 'web') {
+      return new Promise<T>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open(method, url);
+        xhr.timeout = 120000;
+
+        const token = this.getToken();
+        if (token) {
+          xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        }
+        xhr.setRequestHeader('Accept', 'application/json');
+
+        xhr.onload = () => {
+          try {
+            const isJson = (xhr.getResponseHeader('content-type') || '').includes('application/json');
+            let data: any = xhr.responseText;
+            if (isJson) {
+              try {
+                data = JSON.parse(xhr.responseText);
+              } catch (_) {}
+            }
+
+            if (xhr.status >= 200 && xhr.status < 300) {
+              if (data && typeof data === 'object') {
+                if ('success' in data && data.success === false) {
+                  reject(new Error(data.message || 'Upload operation failed'));
+                  return;
+                }
+                if ('data' in data && data.data !== undefined && data.data !== null) {
+                  resolve(data.data as T);
+                  return;
+                }
+                if ('message' in data && typeof data.message === 'string') {
+                  resolve(data.message as unknown as T);
+                  return;
+                }
+              }
+              resolve(data as T);
+            } else {
+              if (xhr.status === 401 && this.onUnauthorizedCallback) {
+                this.onUnauthorizedCallback();
+              }
+              const errMsg =
+                (data && typeof data === 'object' && (data.message || data.error)) ||
+                xhr.responseText ||
+                `HTTP Error ${xhr.status}: ${xhr.statusText}`;
+              reject(new Error(typeof errMsg === 'string' ? errMsg : JSON.stringify(errMsg)));
+            }
+          } catch (e: any) {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve(xhr.responseText as unknown as T);
+            } else {
+              reject(new Error(`HTTP Error ${xhr.status}: ${xhr.responseText}`));
+            }
+          }
+        };
+
+        xhr.onerror = () => {
+          reject(
+            new Error(
+              `Unable to connect to backend server (${this.baseUrl}). Please verify that your backend server is running and reachable.`
+            )
+          );
+        };
+
+        xhr.ontimeout = () => {
+          reject(new Error('File upload timed out after 2 minutes. Please check your network connection.'));
+        };
+
+        xhr.send(formData);
+      });
+    }
+
     const response = await this.fetchWithFallback(url, {
-      method: 'POST',
+      method,
       headers: this.getHeaders(true),
       body: formData,
     });
     return this.handleResponse<T>(response);
   }
 
+  public async postMultipart<T>(path: string, formData: FormData): Promise<T> {
+    return this.sendMultipart<T>('POST', path, formData);
+  }
+
   public async putMultipart<T>(path: string, formData: FormData): Promise<T> {
-    const url = `${this.baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
-    const response = await this.fetchWithFallback(url, {
-      method: 'PUT',
-      headers: this.getHeaders(true),
-      body: formData,
-    });
-    return this.handleResponse<T>(response);
+    return this.sendMultipart<T>('PUT', path, formData);
   }
 }
 

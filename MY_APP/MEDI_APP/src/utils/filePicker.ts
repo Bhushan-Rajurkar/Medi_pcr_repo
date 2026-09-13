@@ -174,11 +174,36 @@ export const filePicker = {
     }
 
     // Native mobile (Android / iOS): React Native requires { uri, name, type }
+    // In Expo SDK 52+, Expo's convertFormDataAsync also checks for 'bytes' in entry
     const pickedFile = picked as PickedFile;
-    const nativeFile = {
+    const nativeFile: any = {
       uri: pickedFile.uri,
       name: pickedFile.name || 'file',
       type: pickedFile.mimeType || 'application/octet-stream',
+      bytes: async () => {
+        try {
+          const FileSystem = require('expo-file-system');
+          const base64 = await FileSystem.readAsStringAsync(pickedFile.uri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          const binaryString = atob(base64);
+          const len = binaryString.length;
+          const bytes = new Uint8Array(len);
+          for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          return bytes;
+        } catch (e) {
+          try {
+            const resp = await fetch(pickedFile.uri);
+            const arrayBuffer = await resp.arrayBuffer();
+            return new Uint8Array(arrayBuffer);
+          } catch (err) {
+            console.warn('Could not read bytes for file part:', err);
+            return new Uint8Array(0);
+          }
+        }
+      },
     };
     formData.append(fieldName, nativeFile as any);
   },

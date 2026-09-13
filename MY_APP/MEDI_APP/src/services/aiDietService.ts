@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { DEFAULT_GEMINI_KEY } from './geminiService';
 
 export interface McqOption {
@@ -200,10 +201,12 @@ export interface ChatMessage {
 
 class AiDietService {
   private getApiKey(): string {
-    if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
+    if (Platform.OS === 'web') {
       try {
-        const stored = window.localStorage.getItem('medi_pcr_gemini_api_key');
-        if (stored && stored.trim()) return stored.trim();
+        if (typeof window !== 'undefined' && 'localStorage' in window && window.localStorage) {
+          const stored = window.localStorage.getItem('medi_pcr_gemini_api_key');
+          if (stored && stored.trim()) return stored.trim();
+        }
       } catch {
         // Ignore localStorage errors on restricted environments
       }

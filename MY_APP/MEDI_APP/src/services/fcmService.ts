@@ -211,27 +211,31 @@ class FcmService {
     console.log(token);
     console.log('====================================');
 
-    // Store token in local storage
-    try {
-      localStorage.setItem(FCM_TOKEN_STORAGE_KEY, token);
-    } catch (e) {
-      // ignore
+    // Store token in local storage (web only)
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(FCM_TOKEN_STORAGE_KEY, token);
+      } catch (e) {
+        // ignore
+      }
     }
 
     // Retrieve logged-in user email or ID if present
     let userEmail: string | undefined;
     let userId: number | undefined;
-    try {
-      const storedUser =
-        localStorage.getItem('medi_pcr_user_data') ||
-        localStorage.getItem('user_profile') ||
-        localStorage.getItem('user');
-      if (storedUser) {
-        const u = JSON.parse(storedUser);
-        userEmail = u.email;
-        userId = u.id;
-      }
-    } catch (e) {}
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        const storedUser =
+          localStorage.getItem('medi_pcr_user_data') ||
+          localStorage.getItem('user_profile') ||
+          localStorage.getItem('user');
+        if (storedUser) {
+          const u = JSON.parse(storedUser);
+          userEmail = u.email;
+          userId = u.id;
+        }
+      } catch (e) {}
+    }
 
     const syncPayload = { fcmToken: token, userEmail, userId };
 
@@ -267,7 +271,7 @@ class FcmService {
     let userEmail: string | undefined;
     let userId: number | undefined;
     try {
-      if (typeof localStorage !== 'undefined') {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
         const storedUser =
           localStorage.getItem('medi_pcr_user_data') ||
           localStorage.getItem('user_profile') ||
