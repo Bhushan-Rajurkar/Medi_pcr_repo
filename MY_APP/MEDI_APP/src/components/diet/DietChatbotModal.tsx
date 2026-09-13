@@ -286,14 +286,7 @@ export const DietChatbotModal: React.FC<DietChatbotModalProps> = ({
         timestamp: Date.now(),
       };
 
-      const followUpPromptMessage: ChatMessage = {
-        id: `followup_prompt_${Date.now()}`,
-        sender: 'bot',
-        text: '💡 **Need any adjustments or substitutions?**\nFeel free to ask questions below (e.g., *"Can I replace eggs with sattu?"*, *"What exercises can I do if my knees hurt?"*).',
-        timestamp: Date.now() + 10,
-      };
-
-      setMessages((prev) => [...prev, planMessage, followUpPromptMessage]);
+      setMessages((prev) => [...prev, planMessage]);
     } catch (err: any) {
       const errorMessage: ChatMessage = {
         id: `err_${Date.now()}`,
@@ -664,49 +657,6 @@ export const DietChatbotModal: React.FC<DietChatbotModalProps> = ({
                   {/* Actions Row */}
                   <View style={[styles.savedActionRow, { borderTopColor: colors.border }]}>
                     <Pressable
-                      onPress={() => downloadPlanFile(saved.plan, saved.category)}
-                      style={[styles.savedActionBtn, { backgroundColor: colors.primary }]}>
-                      <DownloadIcon size={14} color="#FFFFFF" />
-                      <Text style={[styles.savedActionBtnText, { color: '#FFFFFF' }]}>PDF</Text>
-                    </Pressable>
-
-                    <Pressable
-                      onPress={() => handleUploadToCloud(saved.plan, saved.id)}
-                      disabled={isUploading || isUploaded}
-                      style={[
-                        styles.savedActionBtn,
-                        {
-                          backgroundColor: isUploaded
-                            ? isDark
-                              ? '#064E3B'
-                              : '#ECFDF5'
-                            : isDark
-                            ? colors.surfaceHighlight
-                            : '#F1F5F9',
-                          borderColor: isUploaded ? colors.success : colors.border,
-                        },
-                      ]}>
-                      {isUploading ? (
-                        <ActivityIndicator size="small" color={colors.primary} />
-                      ) : isUploaded ? (
-                        <CheckIcon size={14} color={colors.success} />
-                      ) : (
-                        <UploadCloudIcon size={14} color={colors.primary} />
-                      )}
-                      <Text
-                        style={[
-                          styles.savedActionBtnText,
-                          { color: isUploaded ? colors.success : colors.text },
-                        ]}>
-                        {isUploading
-                          ? 'Uploading...'
-                          : isUploaded
-                          ? 'Stored in Cloud'
-                          : '☁️ Save Cloud'}
-                      </Text>
-                    </Pressable>
-
-                    <Pressable
                       onPress={() => setExpandedSavedPlanId(isExpanded ? null : saved.id)}
                       style={[
                         styles.savedActionBtn,
@@ -714,7 +664,7 @@ export const DietChatbotModal: React.FC<DietChatbotModalProps> = ({
                       ]}>
                       <Text style={{ fontSize: 12 }}>{isExpanded ? '🙈' : '👁️'}</Text>
                       <Text style={[styles.savedActionBtnText, { color: colors.text }]}>
-                        {isExpanded ? 'Hide Tables' : 'View Tables'}
+                        {isExpanded ? 'Collapse Tables' : 'View Tables'}
                       </Text>
                     </Pressable>
 
@@ -941,7 +891,7 @@ export const DietChatbotModal: React.FC<DietChatbotModalProps> = ({
                             borderColor: colors.border,
                           },
                         ]}>
-                        {/* Header with Classification Badge */}
+                        {/* Header with Classification Badge & Collapse/Show Tables Toggle */}
                         <View style={styles.planCardHeader}>
                           <View
                             style={[
@@ -953,147 +903,31 @@ export const DietChatbotModal: React.FC<DietChatbotModalProps> = ({
                                     : msg.dietCategory === 'LOSS DIET'
                                     ? '#9A3412'
                                     : '#1E40AF',
+                                marginBottom: 0,
                               },
                             ]}>
                             <Text style={styles.categoryTagText}>
                               🎯 {msg.dietCategory}
                             </Text>
                           </View>
-                          <Text style={[styles.planSuccessTitle, { color: colors.text }]}>
-                            7-Day Nutrition & Fitness Schedule Formulated
-                          </Text>
-                        </View>
 
-                        {/* Concise Summary without essays */}
-                        <Text style={[styles.planSummaryText, { color: colors.textSecondary }]}>
-                          {msg.planData.summary}
-                        </Text>
-
-                        {/* Highlights Badges */}
-                        <View style={styles.highlightsGrid}>
-                          <View style={[styles.highlightPill, { backgroundColor: isDark ? colors.surfaceHighlight : '#F1F5F9' }]}>
-                            <Text style={styles.highlightEmoji}>🍽️</Text>
-                            <Text style={[styles.highlightText, { color: colors.text }]}>
-                              Table 1: 7-Day Food Schedule (Breakfast to Dinner)
-                            </Text>
-                          </View>
-                          <View style={[styles.highlightPill, { backgroundColor: isDark ? colors.surfaceHighlight : '#F1F5F9' }]}>
-                            <Text style={styles.highlightEmoji}>🧘</Text>
-                            <Text style={[styles.highlightText, { color: colors.text }]}>
-                              Table 2: 3-4 Daily Exercises with Yoga & Meditation
-                            </Text>
-                          </View>
-                          <View style={[styles.highlightPill, { backgroundColor: isDark ? colors.surfaceHighlight : '#F1F5F9' }]}>
-                            <Text style={styles.highlightEmoji}>💰</Text>
-                            <Text style={[styles.highlightText, { color: colors.text }]}>
-                              Middle-Class Affordable Staples (Dal, Roti, Rice, Sattu, Besan, Sabzi)
-                            </Text>
-                          </View>
-                        </View>
-
-                        {/* Action Buttons: PDF Download is primary */}
-                        <View style={styles.planPrimaryActions}>
                           <Pressable
-                            onPress={() => printOrSavePdf(msg.planData, msg.dietCategory)}
-                            style={[styles.pdfPrimaryBtn, { backgroundColor: colors.primary }]}>
-                            <FileTextIcon size={18} color="#FFFFFF" />
-                            <Text style={styles.pdfPrimaryBtnText}>
-                              📄 Download / Print Plan as PDF
+                            onPress={() => toggleTablePreview(msg.id)}
+                            style={[
+                              styles.actionBtn,
+                              {
+                                backgroundColor: isDark ? colors.surfaceHighlight : '#F8FAFC',
+                                borderColor: colors.border,
+                              },
+                            ]}>
+                            <Text style={{ fontSize: 13 }}>{tablePreviewOpen[msg.id] === false ? '👁️' : '🙈'}</Text>
+                            <Text style={[styles.actionBtnText, { color: colors.text }]}>
+                              {tablePreviewOpen[msg.id] === false ? 'Show Tables' : 'Collapse Tables'}
                             </Text>
                           </Pressable>
-
-                          <View style={styles.planSecondaryRow}>
-                            <Pressable
-                              onPress={() => downloadPlanFile(msg.planData, msg.dietCategory)}
-                              style={[
-                                styles.actionBtn,
-                                {
-                                  backgroundColor: isDark ? colors.surfaceHighlight : '#F8FAFC',
-                                  borderColor: colors.border,
-                                },
-                              ]}>
-                              <DownloadIcon size={14} color={colors.primary} />
-                              <Text style={[styles.actionBtnText, { color: colors.primary }]}>
-                                Save PDF Plan
-                              </Text>
-                            </Pressable>
-
-                            <Pressable
-                              onPress={() => handleUploadToCloud(msg.planData!, msg.id)}
-                              disabled={cloudUploading[msg.id] || cloudUploaded[msg.id]}
-                              style={[
-                                styles.actionBtn,
-                                {
-                                  backgroundColor: cloudUploaded[msg.id]
-                                    ? (isDark ? '#064E3B' : '#ECFDF5')
-                                    : (isDark ? colors.surfaceHighlight : '#F8FAFC'),
-                                  borderColor: cloudUploaded[msg.id] ? colors.success : colors.border,
-                                },
-                              ]}>
-                              {cloudUploading[msg.id] ? (
-                                <ActivityIndicator size="small" color={colors.primary} />
-                              ) : cloudUploaded[msg.id] ? (
-                                <CheckIcon size={14} color={colors.success} />
-                              ) : (
-                                <UploadCloudIcon size={14} color={colors.primary} />
-                              )}
-                              <Text
-                                style={[
-                                  styles.actionBtnText,
-                                  { color: cloudUploaded[msg.id] ? colors.success : colors.primary },
-                                ]}>
-                                {cloudUploading[msg.id]
-                                  ? 'Uploading...'
-                                  : cloudUploaded[msg.id]
-                                  ? 'Stored in Cloud'
-                                  : '☁️ Save Cloud'}
-                              </Text>
-                            </Pressable>
-
-                            <Pressable
-                              onPress={() => toggleTablePreview(msg.id)}
-                              style={[
-                                styles.actionBtn,
-                                {
-                                  backgroundColor: isDark ? colors.surfaceHighlight : '#F8FAFC',
-                                  borderColor: colors.border,
-                                },
-                              ]}>
-                              <Text style={{ fontSize: 13 }}>{tablePreviewOpen[msg.id] === false ? '👁️' : '🙈'}</Text>
-                              <Text style={[styles.actionBtnText, { color: colors.text }]}>
-                                {tablePreviewOpen[msg.id] === false ? 'Show Tables' : 'Collapse Tables'}
-                              </Text>
-                            </Pressable>
-
-                            <Pressable
-                              onPress={() => copyToClipboard(formatPlanAsHumanReadableText(msg.planData!))}
-                              style={[
-                                styles.actionBtn,
-                                {
-                                  backgroundColor: isDark ? colors.surfaceHighlight : '#F8FAFC',
-                                  borderColor: colors.border,
-                                },
-                              ]}>
-                              {copiedPlan ? (
-                                <>
-                                  <CheckIcon size={14} color={colors.success} />
-                                  <Text style={[styles.actionBtnText, { color: colors.success }]}>
-                                    Copied Text!
-                                  </Text>
-                                </>
-                              ) : (
-                                <>
-                                  <CopyIcon size={14} color={colors.textSecondary} />
-                                  <Text style={[styles.actionBtnText, { color: colors.textSecondary }]}>
-                                    Copy Readable Text
-                                  </Text>
-                                </>
-                              )}
-                            </Pressable>
-                          </View>
                         </View>
 
-                        {/* In-app Table Preview (Visible by default in human-readable format) */}
+                        {/* In-app Table Preview (Visible by default in human-readable tabular format) */}
                         {tablePreviewOpen[msg.id] !== false && (
                           <View style={styles.tablePreviewContainer}>
                             {/* Table 1: Food Schedule */}
@@ -1151,30 +985,30 @@ export const DietChatbotModal: React.FC<DietChatbotModalProps> = ({
                                       {
                                         name: 'Surya Namaskar & Yoga Asanas',
                                         timing: '6:30 AM - 6:50 AM (Morning)',
-                                        duration: '15-20 Mins',
-                                        routine: '5-7 rounds Surya Namaskar + Tadasana, Bhujangasana & Vrikshasana',
-                                        benefits: 'Spine flexibility, joint mobility & core strength',
+                                        duration: '20 Mins',
+                                        routine: '5-7 rounds of Surya Namaskar + Tadasana, Bhujangasana, Vrikshasana, Paschimottanasana',
+                                        benefits: 'Spine flexibility, joint mobility, core strength & stress reduction',
                                       },
                                       {
                                         name: 'Brisk Walking / Light Jogging',
-                                        timing: '6:50 AM - 7:15 AM or Evening 5:30 PM',
-                                        duration: '20-25 Mins',
-                                        routine: 'Continuous brisk walking (3,000-4,000 steps) at steady pace',
-                                        benefits: 'Cardiovascular heart conditioning & active calorie burn',
+                                        timing: '6:50 AM - 7:20 AM (Morning) or Evening 6:00 PM - 6:30 PM',
+                                        duration: '30 Mins',
+                                        routine: 'Continuous brisk walk (4,000-5,000 steps) with steady posture',
+                                        benefits: 'Cardiovascular stamina, healthy blood pressure & metabolic rate',
                                       },
                                       {
                                         name: 'Pranayama (Breathing Exercises)',
-                                        timing: '7:15 AM - 7:25 AM',
-                                        duration: '10 Mins',
-                                        routine: '5 mins Anulom Vilom + 5 mins gentle Kapalbhati',
-                                        benefits: 'Lung capacity expansion & nervous system balance',
+                                        timing: '7:20 AM - 7:35 AM (After walk/yoga)',
+                                        duration: '15 Mins',
+                                        routine: '5 mins Anulom Vilom + 5 mins Kapalbhati + 5 mins Bhramari',
+                                        benefits: 'Lung capacity expansion, oxygenation, nervous system calm & BP regulation',
                                       },
                                       {
                                         name: 'Mindfulness Meditation & Relaxation',
                                         timing: '9:30 PM - 9:45 PM (Bedtime)',
-                                        duration: '10-15 Mins',
-                                        routine: 'Silent breath observation, 4-4-4-4 box breathing & Shavasana',
-                                        benefits: 'Lowers cortisol, calms mind & ensures deep restful sleep',
+                                        duration: '15 Mins',
+                                        routine: 'Silent breath observation, body scan & Shavasana',
+                                        benefits: 'Lowers cortisol/stress, mental clarity & ensures deep restful sleep',
                                       },
                                     ]
                                 ).map((exItem, eIdx) => (
@@ -1634,7 +1468,12 @@ const styles = StyleSheet.create({
     ...Shadows.md,
   },
   planCardHeader: {
-    marginBottom: Spacing.two,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.three,
+    flexWrap: 'wrap',
+    gap: Spacing.two,
   },
   planSuccessTitle: {
     fontSize: 16,

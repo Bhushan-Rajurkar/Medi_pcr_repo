@@ -41,8 +41,6 @@ export const FileCard: React.FC<FileCardProps> = ({ file, onDelete }) => {
   const [previewVisible, setPreviewVisible] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
-  const [blobPreviewUrl, setBlobPreviewUrl] = useState<string | null>(null);
-  const [pdfLoading, setPdfLoading] = useState(false);
 
   const getCleanFileName = (): string => {
     const orig = file.originalFileName || '';
@@ -122,48 +120,6 @@ export const FileCard: React.FC<FileCardProps> = ({ file, onDelete }) => {
       Linking.openURL(targetUrl);
     }
   };
-
-  // Fetch PDF as Blob URL on Web to avoid X-Frame-Options / Refused to connect issues
-  useEffect(() => {
-    let active = true;
-    let urlToRevoke: string | null = null;
-
-    if (previewVisible && isPdfFile() && Platform.OS === 'web') {
-      setPdfLoading(true);
-
-      const fetchPdfBlob = async () => {
-        try {
-          const directUrl = file.url || fileService.getViewUrl(file.id);
-          const res = await fetch(directUrl);
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const blob = await res.blob();
-          const objectUrl = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
-          if (active) {
-            urlToRevoke = objectUrl;
-            setBlobPreviewUrl(objectUrl);
-            setPdfLoading(false);
-          }
-        } catch (err) {
-          console.warn('[FileCard] Could not load blob preview, will use direct URL fallback:', err);
-          if (active) {
-            setBlobPreviewUrl(null);
-            setPdfLoading(false);
-          }
-        }
-      };
-
-      fetchPdfBlob();
-    } else {
-      setBlobPreviewUrl(null);
-    }
-
-    return () => {
-      active = false;
-      if (urlToRevoke) {
-        URL.revokeObjectURL(urlToRevoke);
-      }
-    };
-  }, [previewVisible, file.id, file.url]);
 
   // Download with exact filename and original extension (Fixes 401 error)
   const handleDownload = async () => {
@@ -390,35 +346,30 @@ export const FileCard: React.FC<FileCardProps> = ({ file, onDelete }) => {
                 </View>
               ) : isPdfFile() ? (
                 Platform.OS === 'web' ? (
-                  pdfLoading ? (
-                    <View style={{ height: 350, justifyContent: 'center', alignItems: 'center', width: '100%' }}>
-                      <ActivityIndicator size="large" color={colors.primary} />
-                      <Text style={{ marginTop: 12, color: colors.textSecondary, fontSize: 13 }}>Loading PDF Preview...</Text>
+                  <View style={styles.webPdfWrapper}>
+                    <iframe
+                      src={`https://docs.google.com/viewer?url=${encodeURIComponent(
+                        file.url || fileService.getViewUrl(file.id)
+                      )}&embedded=true`}
+                      style={{
+                        width: '100%',
+                        height: Math.min(windowHeight * 0.68, 560),
+                        border: 'none',
+                        borderRadius: 6,
+                      }}
+                      title={file.fileName}
+                    />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, paddingHorizontal: 4 }}>
+                      <Text style={{ fontSize: 11, color: colors.textSecondary }}>
+                        Trouble viewing document inline?
+                      </Text>
+                      <Pressable
+                        onPress={handleOpenExternalViewer}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Text style={{ fontSize: 11, color: colors.primary, fontWeight: '600' }}>Open in New Window ↗</Text>
+                      </Pressable>
                     </View>
-                  ) : (
-                    <View style={styles.webPdfWrapper}>
-                      <iframe
-                        src={blobPreviewUrl || file.url || fileService.getViewUrl(file.id)}
-                        style={{
-                          width: '100%',
-                          height: Math.min(windowHeight * 0.65, 550),
-                          border: 'none',
-                          borderRadius: 6,
-                        }}
-                        title={file.fileName}
-                      />
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, paddingHorizontal: 4 }}>
-                        <Text style={{ fontSize: 11, color: colors.textSecondary }}>
-                          Trouble viewing document inline?
-                        </Text>
-                        <Pressable
-                          onPress={handleOpenExternalViewer}
-                          style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                          <Text style={{ fontSize: 11, color: colors.primary, fontWeight: '600' }}>Open in New Window ↗</Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  )
+                  </View>
                 ) : (
                   <View style={styles.mobileDocCard}>
                     <FileTextIcon size={64} color={colors.primary} />
