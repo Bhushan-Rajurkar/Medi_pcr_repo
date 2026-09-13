@@ -33,13 +33,22 @@ export const filePicker = {
       const mimeType = asset.mimeType || 'image/jpeg';
       const size = asset.fileSize || 0;
 
+      let fileObj = (asset as any).file instanceof File ? (asset as any).file : undefined;
+      if (Platform.OS === 'web' && !fileObj && asset.uri && typeof window !== 'undefined') {
+        try {
+          const res = await fetch(asset.uri);
+          const blob = await res.blob();
+          fileObj = new File([blob], name, { type: mimeType });
+        } catch (_) {}
+      }
+
       return {
         uri: asset.uri,
         name,
         size,
         mimeType,
         base64: asset.base64 || null,
-        file: (asset as any).file instanceof File ? (asset as any).file : undefined,
+        file: fileObj,
       };
     } catch (err: any) {
       console.error('Image picker error:', err);
@@ -73,13 +82,22 @@ export const filePicker = {
       const mimeType = asset.mimeType || 'image/jpeg';
       const size = asset.fileSize || 0;
 
+      let fileObj = (asset as any).file instanceof File ? (asset as any).file : undefined;
+      if (Platform.OS === 'web' && !fileObj && asset.uri && typeof window !== 'undefined') {
+        try {
+          const res = await fetch(asset.uri);
+          const blob = await res.blob();
+          fileObj = new File([blob], name, { type: mimeType });
+        } catch (_) {}
+      }
+
       return {
         uri: asset.uri,
         name,
         size,
         mimeType,
         base64: asset.base64 || null,
-        file: (asset as any).file instanceof File ? (asset as any).file : undefined,
+        file: fileObj,
       };
     } catch (err: any) {
       console.error('Camera error:', err);
@@ -116,12 +134,21 @@ export const filePicker = {
       const mimeType = asset.mimeType || 'application/octet-stream';
       const size = asset.size || 0;
 
+      let fileObj = asset.file instanceof File ? asset.file : undefined;
+      if (Platform.OS === 'web' && !fileObj && asset.uri && typeof window !== 'undefined') {
+        try {
+          const res = await fetch(asset.uri);
+          const blob = await res.blob();
+          fileObj = new File([blob], name, { type: mimeType });
+        } catch (_) {}
+      }
+
       return {
         uri: asset.uri,
         name,
         size,
         mimeType,
-        file: asset.file instanceof File ? asset.file : undefined,
+        file: fileObj,
       };
     } catch (err: any) {
       console.error('Document picker error:', err);
