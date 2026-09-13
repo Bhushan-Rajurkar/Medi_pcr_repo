@@ -31,7 +31,8 @@ import {
   DownloadIcon,
   FileTextIcon,
 } from '@/components/common/Icons';
-import { getSafeDirectory, writeTextFileAsync } from '@/utils/fileSystemHelper';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 
 interface DietChatbotModalProps {
   visible: boolean;
@@ -175,53 +176,44 @@ export const DietChatbotModal: React.FC<DietChatbotModalProps> = ({
   const downloadPlanFile = async (plan?: StructuredDietPlanResult, category?: string) => {
     if (!plan) return;
     const cleanCategory = (category || plan.category || 'Plan').replace(/\s+/g, '_');
-    const fileName = `Medi_AI_7_Day_Plan_${cleanCategory}.html`;
     const html = aiDietService.generatePlanPdfHtml(plan);
 
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+    if (Platform.OS === 'web') {
+      try {
+        await Print.printAsync({ html });
+      } catch {
+        if (typeof window !== 'undefined') {
+          const printWindow = window.open('', '_blank');
+          if (printWindow) {
+            printWindow.document.write(html);
+            printWindow.document.close();
+            setTimeout(() => {
+              printWindow.focus();
+              printWindow.print();
+            }, 300);
+          }
+        }
+      }
     } else {
       try {
-        const Sharing = require('expo-sharing');
-        const dir = getSafeDirectory();
-        const fileUri = `${dir}${fileName}`;
-        await writeTextFileAsync(fileUri, html);
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(fileUri, {
-            mimeType: 'text/html',
-            dialogTitle: 'Save / Share Diet Plan',
-            UTI: 'public.html',
+        // Generates an actual, human-readable PDF file on Android & iOS
+        const { uri } = await Print.printToFileAsync({ html });
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(uri, {
+            mimeType: 'application/pdf',
+            dialogTitle: `Save / Share Medi-AI Diet Plan (${cleanCategory})`,
+            UTI: 'com.adobe.pdf',
           });
         }
       } catch (err) {
-        console.error('Failed to download/share diet plan on mobile:', err);
+        console.error('Failed to download/share diet plan PDF on mobile:', err);
       }
     }
   };
 
-  const printOrSavePdf = (plan?: StructuredDietPlanResult, category?: string) => {
-    if (!plan) return;
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
-        alert('Please allow popups in your browser to download / print your plan as PDF.');
-        return;
-      }
-      const fullHtml = aiDietService.generatePlanPdfHtml(plan);
-      printWindow.document.write(fullHtml);
-      printWindow.document.close();
-    } else {
-      // On mobile, trigger file download/share
-      downloadPlanFile(plan, category);
-    }
+  const printOrSavePdf = async (plan?: StructuredDietPlanResult, category?: string) => {
+    await downloadPlanFile(plan, category);
   };
 
   const handleGeneratePlan = async () => {

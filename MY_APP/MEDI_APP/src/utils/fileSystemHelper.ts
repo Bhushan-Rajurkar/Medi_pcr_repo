@@ -1,96 +1,92 @@
+import { File, Paths } from 'expo-file-system';
+
 /**
- * Safe FileSystem bridge for Expo across SDK versions.
- * In Expo SDK 54+, async methods like writeAsStringAsync, downloadAsync,
- * and readAsStringAsync are exported via 'expo-file-system/legacy'.
+ * Safe FileSystem bridge for Expo using modern File and Paths classes.
+ * This completely avoids legacy methods like writeAsStringAsync and downloadAsync.
  */
-
-let cachedFs: any = null;
-
-export const getFileSystem = (): any => {
-  if (cachedFs) return cachedFs;
-  try {
-    // Expo SDK 54+ legacy export
-    cachedFs = require('expo-file-system/legacy');
-    return cachedFs;
-  } catch {
-    try {
-      cachedFs = require('expo-file-system');
-      return cachedFs;
-    } catch (err) {
-      console.warn('[fileSystemHelper] Neither expo-file-system/legacy nor expo-file-system could be loaded:', err);
-      return null;
-    }
-  }
-};
 
 /**
  * Returns a local writable directory path (with trailing slash)
  */
 export const getSafeDirectory = (): string => {
-  const fs = getFileSystem();
-  return (fs?.cacheDirectory || fs?.documentDirectory || '');
-};
-
-/**
- * Writes UTF-8 text content to a local file
- */
-export const writeTextFileAsync = async (fileUri: string, content: string): Promise<void> => {
-  const fs = getFileSystem();
-  if (!fs?.writeAsStringAsync) {
-    throw new Error('FileSystem.writeAsStringAsync is not available on this platform.');
+  try {
+    const cacheDir = Paths.cache.uri;
+    return cacheDir.endsWith('/') ? cacheDir : `${cacheDir}/`;
+  } catch {
+    return '';
   }
-  const encoding = fs.EncodingType?.UTF8 || 'utf8';
-  await fs.writeAsStringAsync(fileUri, content, { encoding });
 };
 
 /**
- * Writes Base64 encoded data to a local file
+ * Writes UTF-8 text content to a local file using the modern Expo File class
  */
-export const writeBase64FileAsync = async (fileUri: string, base64Data: string): Promise<void> => {
-  const fs = getFileSystem();
-  if (!fs?.writeAsStringAsync) {
-    throw new Error('FileSystem.writeAsStringAsync is not available on this platform.');
+export const writeTextFileAsync = async (fileUriOrName: string, content: string): Promise<string> => {
+  try {
+    const file = fileUriOrName.startsWith('file:')
+      ? new File(fileUriOrName)
+      : new File(Paths.cache, fileUriOrName);
+    if (!file.exists) {
+      file.create();
+    }
+    file.write(content);
+    return file.uri;
+  } catch (err) {
+    console.warn('[fileSystemHelper] writeTextFileAsync error:', err);
+    throw err;
   }
-  const encoding = fs.EncodingType?.Base64 || 'base64';
-  await fs.writeAsStringAsync(fileUri, base64Data, { encoding });
 };
 
 /**
- * Downloads a remote URL to a local destination file URI
+ * Writes Base64 encoded data to a local file using the modern Expo File class
  */
-export const downloadFileAsync = async (remoteUrl: string, fileUri: string): Promise<any> => {
-  const fs = getFileSystem();
-  if (fs?.downloadAsync) {
-    return await fs.downloadAsync(remoteUrl, fileUri);
+export const writeBase64FileAsync = async (fileUriOrName: string, base64Data: string): Promise<string> => {
+  try {
+    const file = fileUriOrName.startsWith('file:')
+      ? new File(fileUriOrName)
+      : new File(Paths.cache, fileUriOrName);
+    if (!file.exists) {
+      file.create();
+    }
+    const binaryString = atob(base64Data);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    file.write(bytes);
+    return file.uri;
+  } catch (err) {
+    console.warn('[fileSystemHelper] writeBase64FileAsync error:', err);
+    throw err;
   }
-  // Fallback using fetch
-  const response = await fetch(remoteUrl);
-  const blob = await response.blob();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const result = reader.result as string;
-        const base64 = result.includes(',') ? result.split(',')[1] : result;
-        await writeBase64FileAsync(fileUri, base64);
-        resolve({ uri: fileUri, status: 200 });
-      } catch (err) {
-        reject(err);
-      }
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
 };
 
 /**
- * Reads local file as Base64 string
+ * Downloads a remote URL to a local destination file URI using the modern File API
+ */
+export const downloadFileAsync = async (remoteUrl: string, fileUriOrName: string): Promise<{ uri: string }> => {
+  try {
+    const file = fileUriOrName.startsWith('file:')
+      ? new File(fileUriOrName)
+      : new File(Paths.cache, fileUriOrName);
+    await File.downloadFileAsync(remoteUrl, file, { idempotent: true });
+    return { uri: file.uri };
+  } catch (err) {
+    console.warn('[fileSystemHelper] downloadFileAsync error:', err);
+    throw err;
+  }
+};
+
+/**
+ * Reads local file as Base64 string using the modern File API
  */
 export const readFileAsBase64Async = async (fileUri: string): Promise<string> => {
-  const fs = getFileSystem();
-  if (fs?.readAsStringAsync) {
-    const encoding = fs.EncodingType?.Base64 || 'base64';
-    return await fs.readAsStringAsync(fileUri, { encoding });
+  try {
+    const file = new File(fileUri);
+    return await file.base64();
+  } catch (err) {
+    console.warn('[fileSystemHelper] readFileAsBase64Async error:', err);
+    throw err;
   }
-  throw new Error('FileSystem.readAsStringAsync is not available on this platform.');
 };
+
