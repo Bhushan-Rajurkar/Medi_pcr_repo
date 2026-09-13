@@ -4,6 +4,7 @@ import com.brr.medi_pcr.Dto.ApiResponse;
 import com.brr.medi_pcr.Dto.FileResponse;
 import com.brr.medi_pcr.Entity.FileEntity;
 import com.brr.medi_pcr.Service.FileService;
+import com.brr.medi_pcr.Service.CloudinaryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
