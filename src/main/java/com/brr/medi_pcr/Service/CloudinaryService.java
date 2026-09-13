@@ -44,6 +44,8 @@ public class CloudinaryService {
                 ObjectUtils.asMap(
                         "folder", folder,
                         "resource_type", resourceType,
+                        "access_mode", "public",
+                        "type", "upload",
                         "use_filename", true,
                         "unique_filename", true,
                         "overwrite", false
