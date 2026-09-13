@@ -30,9 +30,13 @@ import {
   DietIcon,
   DownloadIcon,
   FileTextIcon,
+  UploadCloudIcon,
+  TrashIcon,
 } from '@/components/common/Icons';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import { saveAndSharePdfAsync } from '@/utils/fileSystemHelper';
+import { dietStorageService, SavedDietPlan } from '@/services/dietStorageService';
 
 interface DietChatbotModalProps {
   visible: boolean;
@@ -50,6 +54,12 @@ export const DietChatbotModal: React.FC<DietChatbotModalProps> = ({
   const { width } = useWindowDimensions();
   const isMobile = width < 640;
 
+  const [activeTab, setActiveTab] = useState<'generator' | 'saved'>('generator');
+  const [savedPlans, setSavedPlans] = useState<SavedDietPlan[]>([]);
+  const [expandedSavedPlanId, setExpandedSavedPlanId] = useState<string | null>(null);
+  const [cloudUploading, setCloudUploading] = useState<Record<string, boolean>>({});
+  const [cloudUploaded, setCloudUploaded] = useState<Record<string, boolean>>({});
+
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
@@ -60,6 +70,28 @@ export const DietChatbotModal: React.FC<DietChatbotModalProps> = ({
   const [copiedPlan, setCopiedPlan] = useState<boolean>(false);
   const [assessmentComplete, setAssessmentComplete] = useState<boolean>(false);
   const [tablePreviewOpen, setTablePreviewOpen] = useState<Record<string, boolean>>({});
+
+  const loadSavedPlans = async () => {
+    try {
+      const plans = await dietStorageService.getSavedPlans();
+      setSavedPlans(plans);
+    } catch (e) {
+      console.warn('Error loading saved plans:', e);
+    }
+  };
+
+  useEffect(() => {
+    loadSavedPlans();
+  }, []);
+
+  const handleDeleteSavedPlan = async (id: string) => {
+    try {
+      await dietStorageService.deletePlan(id);
+      await loadSavedPlans();
+    } catch (e) {
+      console.warn('Failed to delete saved plan:', e);
+    }
+  };
 
   const toggleTablePreview = (msgId: string) => {
     setTablePreviewOpen((prev) => ({ ...prev, [msgId]: prev[msgId] === false ? true : false }));
@@ -196,11 +228,12 @@ export const DietChatbotModal: React.FC<DietChatbotModalProps> = ({
       }
     } else {
       try {
-        // Generates an actual, human-readable PDF file on Android & iOS
-        const { uri } = await Print.printToFileAsync({ html });
+        // Generates an actual, human-readable PDF file on Android & iOS using root cache permissions
+        const { uri, base64 } = await Print.printToFileAsync({ html, base64: true });
+        const safeUri = await saveAndSharePdfAsync(base64 || uri, `${cleanCategory}_Diet_Plan_${Date.now()}.pdf`);
         const canShare = await Sharing.isAvailableAsync();
         if (canShare) {
-          await Sharing.shareAsync(uri, {
+          await Sharing.shareAsync(safeUri, {
             mimeType: 'application/pdf',
             dialogTitle: `Save / Share Medi-AI Diet Plan (${cleanCategory})`,
             UTI: 'com.adobe.pdf',
@@ -212,6 +245,20 @@ export const DietChatbotModal: React.FC<DietChatbotModalProps> = ({
     }
   };
 
+  const handleUploadToCloud = async (plan: StructuredDietPlanResult, planIdOrMsgId: string) => {
+    setCloudUploading((prev) => ({ ...prev, [planIdOrMsgId]: true }));
+    try {
+      await dietStorageService.uploadPlanToCloud(plan);
+      setCloudUploaded((prev) => ({ ...prev, [planIdOrMsgId]: true }));
+      await loadSavedPlans();
+    } catch (err: any) {
+      console.error('Failed to upload plan to cloud storage:', err);
+      alert('Cloud Upload Error: ' + (err.message || 'Could not upload to cloud'));
+    } finally {
+      setCloudUploading((prev) => ({ ...prev, [planIdOrMsgId]: false }));
+    }
+  };
+
   const printOrSavePdf = async (plan?: StructuredDietPlanResult, category?: string) => {
     await downloadPlanFile(plan, category);
   };
@@ -220,6 +267,14 @@ export const DietChatbotModal: React.FC<DietChatbotModalProps> = ({
     setGenerating(true);
     try {
       const result = await aiDietService.generateDietPlan(answers);
+
+      // Automatically persist the generated plan so the user can view it anytime
+      try {
+        await dietStorageService.savePlan(result);
+        await loadSavedPlans();
+      } catch (saveErr) {
+        console.warn('Could not auto-save generated plan:', saveErr);
+      }
 
       const planMessage: ChatMessage = {
         id: `plan_${Date.now()}`,
@@ -444,545 +499,967 @@ export const DietChatbotModal: React.FC<DietChatbotModalProps> = ({
         </View>
       </View>
 
-      {/* Progress Bar (Visible during assessment) */}
-      {!assessmentComplete && currentQuestionIndex < PREDEFINED_QUESTIONS.length && (
-        <View style={[styles.progressBarContainer, { backgroundColor: isDark ? '#1E293B' : '#E2E8F0' }]}>
-          <View
-            style={[
-              styles.progressBarFill,
-              {
-                backgroundColor: colors.primary,
-                width: `${((currentQuestionIndex + 1) / PREDEFINED_QUESTIONS.length) * 100}%`,
-              },
-            ]}
+      {/* Navigation Tab Bar: Generator vs Saved Plans */}
+      <View
+        style={[
+          styles.tabBar,
+          {
+            borderBottomColor: colors.border,
+            backgroundColor: isDark ? colors.surfaceElevated : '#FFFFFF',
+          },
+        ]}>
+        <Pressable
+          onPress={() => setActiveTab('generator')}
+          style={[
+            styles.tabItem,
+            activeTab === 'generator' && [styles.activeTabItem, { borderBottomColor: colors.primary }],
+          ]}>
+          <SparklesIcon
+            size={15}
+            color={activeTab === 'generator' ? colors.primary : colors.textSecondary}
           />
-        </View>
-      )}
+          <Text
+            style={[
+              styles.tabText,
+              {
+                color: activeTab === 'generator' ? colors.primary : colors.textSecondary,
+                fontWeight: activeTab === 'generator' ? '700' : '500',
+              },
+            ]}>
+            AI Generator
+          </Text>
+        </Pressable>
 
-      {/* Scrollable Chat Area */}
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.chatScroll}
-        contentContainerStyle={[styles.chatContent, isMobile && { padding: Spacing.three, gap: Spacing.three }]}
-        keyboardShouldPersistTaps="handled">
-        {messages.map((msg, index) => {
-          const isBot = msg.sender === 'bot';
+        <Pressable
+          onPress={() => {
+            setActiveTab('saved');
+            loadSavedPlans();
+          }}
+          style={[
+            styles.tabItem,
+            activeTab === 'saved' && [styles.activeTabItem, { borderBottomColor: colors.primary }],
+          ]}>
+          <FileTextIcon
+            size={15}
+            color={activeTab === 'saved' ? colors.primary : colors.textSecondary}
+          />
+          <Text
+            style={[
+              styles.tabText,
+              {
+                color: activeTab === 'saved' ? colors.primary : colors.textSecondary,
+                fontWeight: activeTab === 'saved' ? '700' : '500',
+              },
+            ]}>
+            Saved Diet Plans {savedPlans.length > 0 ? `(${savedPlans.length})` : ''}
+          </Text>
+        </Pressable>
+      </View>
 
-          return (
+      {activeTab === 'saved' ? (
+        <ScrollView
+          style={styles.chatScroll}
+          contentContainerStyle={[styles.chatContent, isMobile && { padding: Spacing.three, gap: Spacing.three }]}>
+          {/* Saved Plans Header Bar */}
+          <View style={styles.savedTopBar}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.savedHeaderTitle, { color: colors.text }]}>
+                My Saved Diet & Fitness Plans
+              </Text>
+              <Text style={[styles.savedHeaderSubtitle, { color: colors.textSecondary }]}>
+                Review past formulated diets, view schedule tables, or re-download anytime.
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => {
+                resetChat();
+                setActiveTab('generator');
+              }}
+              style={[styles.generateNewBtn, { backgroundColor: colors.primary }]}>
+              <SparklesIcon size={14} color="#FFFFFF" />
+              <Text style={styles.generateNewBtnText}>+ Formulate New Diet Plan</Text>
+            </Pressable>
+          </View>
+
+          {savedPlans.length === 0 ? (
+            <View style={styles.emptySavedBox}>
+              <DietIcon size={48} color={colors.primary} />
+              <Text style={[styles.emptySavedTitle, { color: colors.text }]}>
+                No Saved Diet Plans Yet
+              </Text>
+              <Text style={[styles.emptySavedSubtitle, { color: colors.textSecondary }]}>
+                Complete the 10 quick questions in the AI Generator tab to formulate and save your first personalized 7-day schedule.
+              </Text>
+              <Pressable
+                onPress={() => setActiveTab('generator')}
+                style={[styles.emptyActionBtn, { backgroundColor: colors.primary }]}>
+                <SparklesIcon size={16} color="#FFFFFF" />
+                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14 }}>
+                  Start 10-Question Assessment
+                </Text>
+              </Pressable>
+            </View>
+          ) : (
+            savedPlans.map((saved) => {
+              const isExpanded = expandedSavedPlanId === saved.id;
+              const isUploading = cloudUploading[saved.id];
+              const isUploaded = cloudUploaded[saved.id] || !!saved.cloudUrl;
+
+              return (
+                <View
+                  key={saved.id}
+                  style={[
+                    styles.savedPlanCard,
+                    {
+                      backgroundColor: isDark ? colors.surfaceElevated : '#FFFFFF',
+                      borderColor: colors.border,
+                    },
+                  ]}>
+                  <View style={styles.savedPlanHeader}>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <Text style={[styles.savedPlanTitle, { color: colors.text }]}>
+                          {saved.title}
+                        </Text>
+                        <View
+                          style={[
+                            styles.categoryBadge,
+                            {
+                              backgroundColor:
+                                saved.category === 'GAIN DIET'
+                                  ? '#3B82F6'
+                                  : saved.category === 'LOSS DIET'
+                                  ? '#EF4444'
+                                  : '#10B981',
+                            },
+                          ]}>
+                          <Text style={styles.categoryBadgeText}>{saved.category}</Text>
+                        </View>
+                        {isUploaded && (
+                          <View style={[styles.categoryBadge, { backgroundColor: '#059669' }]}>
+                            <Text style={styles.categoryBadgeText}>☁️ In Cloud</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={[styles.savedPlanDate, { color: colors.textSecondary }]}>
+                        Saved on{' '}
+                        {new Date(saved.savedAt).toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </Text>
+                      {saved.plan.summary && (
+                        <Text
+                          numberOfLines={isExpanded ? undefined : 2}
+                          style={[styles.savedPlanSummary, { color: colors.textSecondary }]}>
+                          {saved.plan.summary}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Actions Row */}
+                  <View style={[styles.savedActionRow, { borderTopColor: colors.border }]}>
+                    <Pressable
+                      onPress={() => downloadPlanFile(saved.plan, saved.category)}
+                      style={[styles.savedActionBtn, { backgroundColor: colors.primary }]}>
+                      <DownloadIcon size={14} color="#FFFFFF" />
+                      <Text style={[styles.savedActionBtnText, { color: '#FFFFFF' }]}>PDF</Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => handleUploadToCloud(saved.plan, saved.id)}
+                      disabled={isUploading || isUploaded}
+                      style={[
+                        styles.savedActionBtn,
+                        {
+                          backgroundColor: isUploaded
+                            ? isDark
+                              ? '#064E3B'
+                              : '#ECFDF5'
+                            : isDark
+                            ? colors.surfaceHighlight
+                            : '#F1F5F9',
+                          borderColor: isUploaded ? colors.success : colors.border,
+                        },
+                      ]}>
+                      {isUploading ? (
+                        <ActivityIndicator size="small" color={colors.primary} />
+                      ) : isUploaded ? (
+                        <CheckIcon size={14} color={colors.success} />
+                      ) : (
+                        <UploadCloudIcon size={14} color={colors.primary} />
+                      )}
+                      <Text
+                        style={[
+                          styles.savedActionBtnText,
+                          { color: isUploaded ? colors.success : colors.text },
+                        ]}>
+                        {isUploading
+                          ? 'Uploading...'
+                          : isUploaded
+                          ? 'Stored in Cloud'
+                          : '☁️ Save Cloud'}
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => setExpandedSavedPlanId(isExpanded ? null : saved.id)}
+                      style={[
+                        styles.savedActionBtn,
+                        { backgroundColor: isDark ? colors.surfaceHighlight : '#F1F5F9' },
+                      ]}>
+                      <Text style={{ fontSize: 12 }}>{isExpanded ? '🙈' : '👁️'}</Text>
+                      <Text style={[styles.savedActionBtnText, { color: colors.text }]}>
+                        {isExpanded ? 'Hide Tables' : 'View Tables'}
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => handleDeleteSavedPlan(saved.id)}
+                      style={styles.savedDeleteBtn}>
+                      <TrashIcon size={15} color="#EF4444" />
+                    </Pressable>
+                  </View>
+
+                  {/* Expanded Tables */}
+                  {isExpanded && (
+                    <View style={[styles.tablePreviewContainer, { marginTop: Spacing.three }]}>
+                      <Text style={[styles.tableSectionTitle, { color: colors.text }]}>
+                        🍽️ Table 1: 7-Day Food Schedule
+                      </Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={true} style={styles.tableScroll}>
+                        <View style={styles.tableBox}>
+                          <View style={[styles.tableRow, styles.tableHeaderRow]}>
+                            <Text style={[styles.tableHeaderCell, { width: 90 }]}>Day</Text>
+                            <Text style={[styles.tableHeaderCell, { width: 140 }]}>🌅 Early Morning</Text>
+                            <Text style={[styles.tableHeaderCell, { width: 150 }]}>🥣 Breakfast</Text>
+                            <Text style={[styles.tableHeaderCell, { width: 140 }]}>🍎 Mid-Morning</Text>
+                            <Text style={[styles.tableHeaderCell, { width: 180 }]}>🍛 Lunch</Text>
+                            <Text style={[styles.tableHeaderCell, { width: 140 }]}>☕ Evening Snack</Text>
+                            <Text style={[styles.tableHeaderCell, { width: 180 }]}>🍲 Dinner</Text>
+                            <Text style={[styles.tableHeaderCell, { width: 130 }]}>🥛 Bedtime</Text>
+                          </View>
+                          {saved.plan.weeklyDiet.map((dayPlan, dIdx) => (
+                            <View
+                              key={dIdx}
+                              style={[
+                                styles.tableRow,
+                                {
+                                  backgroundColor:
+                                    dIdx % 2 === 0
+                                      ? isDark
+                                        ? colors.surface
+                                        : '#FFFFFF'
+                                      : isDark
+                                      ? colors.surfaceHighlight
+                                      : '#F8FAFC',
+                                },
+                              ]}>
+                              <Text
+                                style={[styles.tableCell, styles.dayCellText, { width: 90, color: colors.text }]}>
+                                {dayPlan.day}
+                              </Text>
+                              <Text style={[styles.tableCell, { width: 140, color: colors.textSecondary }]}>
+                                {dayPlan.earlyMorning}
+                              </Text>
+                              <Text style={[styles.tableCell, { width: 150, color: colors.textSecondary }]}>
+                                {dayPlan.breakfast}
+                              </Text>
+                              <Text style={[styles.tableCell, { width: 140, color: colors.textSecondary }]}>
+                                {dayPlan.midMorning}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.tableCell,
+                                  { width: 180, color: colors.text, fontWeight: '600' },
+                                ]}>
+                                {dayPlan.lunch}
+                              </Text>
+                              <Text style={[styles.tableCell, { width: 140, color: colors.textSecondary }]}>
+                                {dayPlan.eveningSnack}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.tableCell,
+                                  { width: 180, color: colors.text, fontWeight: '600' },
+                                ]}>
+                                {dayPlan.dinner}
+                              </Text>
+                              <Text style={[styles.tableCell, { width: 130, color: colors.textSecondary }]}>
+                                {dayPlan.bedtime}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      </ScrollView>
+
+                      <Text style={[styles.tableSectionTitle, { color: colors.text, marginTop: Spacing.four }]}>
+                        🧘 Table 2: Daily Exercises with Yoga & Meditation (3-4 Focus Routines)
+                      </Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={true} style={styles.tableScroll}>
+                        <View style={styles.tableBox}>
+                          <View style={[styles.tableRow, styles.tableHeaderRow]}>
+                            <Text style={[styles.tableHeaderCell, { width: 40, textAlign: 'center' }]}>#</Text>
+                            <Text style={[styles.tableHeaderCell, { width: 180 }]}>Exercise / Yoga Routine</Text>
+                            <Text style={[styles.tableHeaderCell, { width: 170 }]}>⏰ Timings & Duration</Text>
+                            <Text style={[styles.tableHeaderCell, { width: 260 }]}>Specific Routine Steps</Text>
+                            <Text style={[styles.tableHeaderCell, { width: 180 }]}>Primary Benefit</Text>
+                          </View>
+                          {(saved.plan.exercises || []).map((exItem, eIdx) => (
+                            <View
+                              key={eIdx}
+                              style={[
+                                styles.tableRow,
+                                {
+                                  backgroundColor:
+                                    eIdx % 2 === 0
+                                      ? isDark
+                                        ? colors.surface
+                                        : '#FFFFFF'
+                                      : isDark
+                                      ? colors.surfaceHighlight
+                                      : '#F8FAFC',
+                                },
+                              ]}>
+                              <Text
+                                style={[
+                                  styles.tableCell,
+                                  {
+                                    width: 40,
+                                    textAlign: 'center',
+                                    color: colors.primary,
+                                    fontWeight: '700',
+                                  },
+                                ]}>
+                                {eIdx + 1}
+                              </Text>
+                              <Text
+                                style={[styles.tableCell, styles.dayCellText, { width: 180, color: colors.text }]}>
+                                {exItem.name}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.tableCell,
+                                  { width: 170, color: colors.primary, fontWeight: '700' },
+                                ]}>
+                                {exItem.timing}
+                                {'\n'}
+                                <Text
+                                  style={{
+                                    color: colors.textSecondary,
+                                    fontWeight: '500',
+                                    fontSize: 10,
+                                  }}>
+                                  ⏱️ {exItem.duration}
+                                </Text>
+                              </Text>
+                              <Text style={[styles.tableCell, { width: 260, color: colors.textSecondary }]}>
+                                {exItem.routine}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.tableCell,
+                                  { width: 180, color: colors.success, fontWeight: '600' },
+                                ]}>
+                                {exItem.benefits}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
+              );
+            })
+          )}
+        </ScrollView>
+      ) : (
+        <>
+          {/* Progress Bar (Visible during assessment) */}
+          {!assessmentComplete && currentQuestionIndex < PREDEFINED_QUESTIONS.length && (
             <View
-              key={msg.id || index}
               style={[
-                styles.messageRow,
-                isBot ? styles.botMessageRow : styles.userMessageRow,
+                styles.progressBarContainer,
+                { backgroundColor: isDark ? '#1E293B' : '#E2E8F0' },
               ]}>
-              {/* Bot Avatar */}
-              {isBot && (
+              <View
+                style={[
+                  styles.progressBarFill,
+                  {
+                    backgroundColor: colors.primary,
+                    width: `${((currentQuestionIndex + 1) / PREDEFINED_QUESTIONS.length) * 100}%`,
+                  },
+                ]}
+              />
+            </View>
+          )}
+
+          {/* Scrollable Chat Area */}
+          <ScrollView
+            ref={scrollViewRef}
+            style={styles.chatScroll}
+            contentContainerStyle={[
+              styles.chatContent,
+              isMobile && { padding: Spacing.three, gap: Spacing.three },
+            ]}
+            keyboardShouldPersistTaps="handled">
+            {messages.map((msg, index) => {
+              const isBot = msg.sender === 'bot';
+
+              return (
+                <View
+                  key={msg.id || index}
+                  style={[
+                    styles.messageRow,
+                    isBot ? styles.botMessageRow : styles.userMessageRow,
+                  ]}>
+                  {/* Bot Avatar */}
+                  {isBot && (
+                    <View style={[styles.botAvatar, { backgroundColor: colors.primaryLight }]}>
+                      <DietIcon size={16} color={colors.primary} />
+                    </View>
+                  )}
+
+                  <View
+                    style={[
+                      styles.bubbleWrapper,
+                      { maxWidth: isMobile ? '96%' : '85%' },
+                      !isBot && { alignItems: 'flex-end' },
+                    ]}>
+                    {/* Diet Plan Card: Clean summary with PDF download and NO wall of text preview */}
+                    {msg.isDietPlan && msg.planData ? (
+                      <View
+                        style={[
+                          styles.planContainerCard,
+                          {
+                            backgroundColor: isDark ? colors.surfaceElevated : '#FFFFFF',
+                            borderColor: colors.border,
+                          },
+                        ]}>
+                        {/* Header with Classification Badge */}
+                        <View style={styles.planCardHeader}>
+                          <View
+                            style={[
+                              styles.categoryTag,
+                              {
+                                backgroundColor:
+                                  msg.dietCategory === 'GAIN DIET'
+                                    ? '#065F46'
+                                    : msg.dietCategory === 'LOSS DIET'
+                                    ? '#9A3412'
+                                    : '#1E40AF',
+                              },
+                            ]}>
+                            <Text style={styles.categoryTagText}>
+                              🎯 {msg.dietCategory}
+                            </Text>
+                          </View>
+                          <Text style={[styles.planSuccessTitle, { color: colors.text }]}>
+                            7-Day Nutrition & Fitness Schedule Formulated
+                          </Text>
+                        </View>
+
+                        {/* Concise Summary without essays */}
+                        <Text style={[styles.planSummaryText, { color: colors.textSecondary }]}>
+                          {msg.planData.summary}
+                        </Text>
+
+                        {/* Highlights Badges */}
+                        <View style={styles.highlightsGrid}>
+                          <View style={[styles.highlightPill, { backgroundColor: isDark ? colors.surfaceHighlight : '#F1F5F9' }]}>
+                            <Text style={styles.highlightEmoji}>🍽️</Text>
+                            <Text style={[styles.highlightText, { color: colors.text }]}>
+                              Table 1: 7-Day Food Schedule (Breakfast to Dinner)
+                            </Text>
+                          </View>
+                          <View style={[styles.highlightPill, { backgroundColor: isDark ? colors.surfaceHighlight : '#F1F5F9' }]}>
+                            <Text style={styles.highlightEmoji}>🧘</Text>
+                            <Text style={[styles.highlightText, { color: colors.text }]}>
+                              Table 2: 3-4 Daily Exercises with Yoga & Meditation
+                            </Text>
+                          </View>
+                          <View style={[styles.highlightPill, { backgroundColor: isDark ? colors.surfaceHighlight : '#F1F5F9' }]}>
+                            <Text style={styles.highlightEmoji}>💰</Text>
+                            <Text style={[styles.highlightText, { color: colors.text }]}>
+                              Middle-Class Affordable Staples (Dal, Roti, Rice, Sattu, Besan, Sabzi)
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Action Buttons: PDF Download is primary */}
+                        <View style={styles.planPrimaryActions}>
+                          <Pressable
+                            onPress={() => printOrSavePdf(msg.planData, msg.dietCategory)}
+                            style={[styles.pdfPrimaryBtn, { backgroundColor: colors.primary }]}>
+                            <FileTextIcon size={18} color="#FFFFFF" />
+                            <Text style={styles.pdfPrimaryBtnText}>
+                              📄 Download / Print Plan as PDF
+                            </Text>
+                          </Pressable>
+
+                          <View style={styles.planSecondaryRow}>
+                            <Pressable
+                              onPress={() => downloadPlanFile(msg.planData, msg.dietCategory)}
+                              style={[
+                                styles.actionBtn,
+                                {
+                                  backgroundColor: isDark ? colors.surfaceHighlight : '#F8FAFC',
+                                  borderColor: colors.border,
+                                },
+                              ]}>
+                              <DownloadIcon size={14} color={colors.primary} />
+                              <Text style={[styles.actionBtnText, { color: colors.primary }]}>
+                                Save PDF Plan
+                              </Text>
+                            </Pressable>
+
+                            <Pressable
+                              onPress={() => handleUploadToCloud(msg.planData!, msg.id)}
+                              disabled={cloudUploading[msg.id] || cloudUploaded[msg.id]}
+                              style={[
+                                styles.actionBtn,
+                                {
+                                  backgroundColor: cloudUploaded[msg.id]
+                                    ? (isDark ? '#064E3B' : '#ECFDF5')
+                                    : (isDark ? colors.surfaceHighlight : '#F8FAFC'),
+                                  borderColor: cloudUploaded[msg.id] ? colors.success : colors.border,
+                                },
+                              ]}>
+                              {cloudUploading[msg.id] ? (
+                                <ActivityIndicator size="small" color={colors.primary} />
+                              ) : cloudUploaded[msg.id] ? (
+                                <CheckIcon size={14} color={colors.success} />
+                              ) : (
+                                <UploadCloudIcon size={14} color={colors.primary} />
+                              )}
+                              <Text
+                                style={[
+                                  styles.actionBtnText,
+                                  { color: cloudUploaded[msg.id] ? colors.success : colors.primary },
+                                ]}>
+                                {cloudUploading[msg.id]
+                                  ? 'Uploading...'
+                                  : cloudUploaded[msg.id]
+                                  ? 'Stored in Cloud'
+                                  : '☁️ Save Cloud'}
+                              </Text>
+                            </Pressable>
+
+                            <Pressable
+                              onPress={() => toggleTablePreview(msg.id)}
+                              style={[
+                                styles.actionBtn,
+                                {
+                                  backgroundColor: isDark ? colors.surfaceHighlight : '#F8FAFC',
+                                  borderColor: colors.border,
+                                },
+                              ]}>
+                              <Text style={{ fontSize: 13 }}>{tablePreviewOpen[msg.id] === false ? '👁️' : '🙈'}</Text>
+                              <Text style={[styles.actionBtnText, { color: colors.text }]}>
+                                {tablePreviewOpen[msg.id] === false ? 'Show Tables' : 'Collapse Tables'}
+                              </Text>
+                            </Pressable>
+
+                            <Pressable
+                              onPress={() => copyToClipboard(formatPlanAsHumanReadableText(msg.planData!))}
+                              style={[
+                                styles.actionBtn,
+                                {
+                                  backgroundColor: isDark ? colors.surfaceHighlight : '#F8FAFC',
+                                  borderColor: colors.border,
+                                },
+                              ]}>
+                              {copiedPlan ? (
+                                <>
+                                  <CheckIcon size={14} color={colors.success} />
+                                  <Text style={[styles.actionBtnText, { color: colors.success }]}>
+                                    Copied Text!
+                                  </Text>
+                                </>
+                              ) : (
+                                <>
+                                  <CopyIcon size={14} color={colors.textSecondary} />
+                                  <Text style={[styles.actionBtnText, { color: colors.textSecondary }]}>
+                                    Copy Readable Text
+                                  </Text>
+                                </>
+                              )}
+                            </Pressable>
+                          </View>
+                        </View>
+
+                        {/* In-app Table Preview (Visible by default in human-readable format) */}
+                        {tablePreviewOpen[msg.id] !== false && (
+                          <View style={styles.tablePreviewContainer}>
+                            {/* Table 1: Food Schedule */}
+                            <Text style={[styles.tableSectionTitle, { color: colors.text }]}>
+                              🍽️ Table 1: 7-Day Food Schedule
+                            </Text>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={true} style={styles.tableScroll}>
+                              <View style={styles.tableBox}>
+                                <View style={[styles.tableRow, styles.tableHeaderRow]}>
+                                  <Text style={[styles.tableHeaderCell, { width: 90 }]}>Day</Text>
+                                  <Text style={[styles.tableHeaderCell, { width: 140 }]}>🌅 Early Morning</Text>
+                                  <Text style={[styles.tableHeaderCell, { width: 150 }]}>🥣 Breakfast</Text>
+                                  <Text style={[styles.tableHeaderCell, { width: 140 }]}>🍎 Mid-Morning</Text>
+                                  <Text style={[styles.tableHeaderCell, { width: 180 }]}>🍛 Lunch</Text>
+                                  <Text style={[styles.tableHeaderCell, { width: 140 }]}>☕ Evening Snack</Text>
+                                  <Text style={[styles.tableHeaderCell, { width: 180 }]}>🍲 Dinner</Text>
+                                  <Text style={[styles.tableHeaderCell, { width: 130 }]}>🥛 Bedtime</Text>
+                                </View>
+                                {msg.planData.weeklyDiet.map((dayPlan, dIdx) => (
+                                  <View
+                                    key={dIdx}
+                                    style={[
+                                      styles.tableRow,
+                                      { backgroundColor: dIdx % 2 === 0 ? (isDark ? colors.surface : '#FFFFFF') : (isDark ? colors.surfaceHighlight : '#F8FAFC') },
+                                    ]}>
+                                    <Text style={[styles.tableCell, styles.dayCellText, { width: 90, color: colors.text }]}>{dayPlan.day}</Text>
+                                    <Text style={[styles.tableCell, { width: 140, color: colors.textSecondary }]}>{dayPlan.earlyMorning}</Text>
+                                    <Text style={[styles.tableCell, { width: 150, color: colors.textSecondary }]}>{dayPlan.breakfast}</Text>
+                                    <Text style={[styles.tableCell, { width: 140, color: colors.textSecondary }]}>{dayPlan.midMorning}</Text>
+                                    <Text style={[styles.tableCell, { width: 180, color: colors.text, fontWeight: '600' }]}>{dayPlan.lunch}</Text>
+                                    <Text style={[styles.tableCell, { width: 140, color: colors.textSecondary }]}>{dayPlan.eveningSnack}</Text>
+                                    <Text style={[styles.tableCell, { width: 180, color: colors.text, fontWeight: '600' }]}>{dayPlan.dinner}</Text>
+                                    <Text style={[styles.tableCell, { width: 130, color: colors.textSecondary }]}>{dayPlan.bedtime}</Text>
+                                  </View>
+                                ))}
+                              </View>
+                            </ScrollView>
+
+                            {/* Table 2: 3-4 Focused Daily Exercises with Yoga & Meditation */}
+                            <Text style={[styles.tableSectionTitle, { color: colors.text, marginTop: Spacing.four }]}>
+                              🧘 Table 2: Daily Exercises with Yoga & Meditation (3-4 Focus Routines)
+                            </Text>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={true} style={styles.tableScroll}>
+                              <View style={styles.tableBox}>
+                                <View style={[styles.tableRow, styles.tableHeaderRow]}>
+                                  <Text style={[styles.tableHeaderCell, { width: 40, textAlign: 'center' }]}>#</Text>
+                                  <Text style={[styles.tableHeaderCell, { width: 180 }]}>Exercise / Yoga Routine</Text>
+                                  <Text style={[styles.tableHeaderCell, { width: 170 }]}>⏰ Timings & Duration</Text>
+                                  <Text style={[styles.tableHeaderCell, { width: 260 }]}>Specific Routine Steps</Text>
+                                  <Text style={[styles.tableHeaderCell, { width: 180 }]}>Primary Benefit</Text>
+                                </View>
+                                {(msg.planData.exercises && msg.planData.exercises.length > 0
+                                  ? msg.planData.exercises
+                                  : [
+                                      {
+                                        name: 'Surya Namaskar & Yoga Asanas',
+                                        timing: '6:30 AM - 6:50 AM (Morning)',
+                                        duration: '15-20 Mins',
+                                        routine: '5-7 rounds Surya Namaskar + Tadasana, Bhujangasana & Vrikshasana',
+                                        benefits: 'Spine flexibility, joint mobility & core strength',
+                                      },
+                                      {
+                                        name: 'Brisk Walking / Light Jogging',
+                                        timing: '6:50 AM - 7:15 AM or Evening 5:30 PM',
+                                        duration: '20-25 Mins',
+                                        routine: 'Continuous brisk walking (3,000-4,000 steps) at steady pace',
+                                        benefits: 'Cardiovascular heart conditioning & active calorie burn',
+                                      },
+                                      {
+                                        name: 'Pranayama (Breathing Exercises)',
+                                        timing: '7:15 AM - 7:25 AM',
+                                        duration: '10 Mins',
+                                        routine: '5 mins Anulom Vilom + 5 mins gentle Kapalbhati',
+                                        benefits: 'Lung capacity expansion & nervous system balance',
+                                      },
+                                      {
+                                        name: 'Mindfulness Meditation & Relaxation',
+                                        timing: '9:30 PM - 9:45 PM (Bedtime)',
+                                        duration: '10-15 Mins',
+                                        routine: 'Silent breath observation, 4-4-4-4 box breathing & Shavasana',
+                                        benefits: 'Lowers cortisol, calms mind & ensures deep restful sleep',
+                                      },
+                                    ]
+                                ).map((exItem, eIdx) => (
+                                  <View
+                                    key={eIdx}
+                                    style={[
+                                      styles.tableRow,
+                                      {
+                                        backgroundColor:
+                                          eIdx % 2 === 0
+                                            ? (isDark ? colors.surface : '#FFFFFF')
+                                            : (isDark ? colors.surfaceHighlight : '#F8FAFC'),
+                                      },
+                                    ]}>
+                                    <Text
+                                      style={[
+                                        styles.tableCell,
+                                        { width: 40, textAlign: 'center', color: colors.primary, fontWeight: '700' },
+                                      ]}>
+                                      {eIdx + 1}
+                                    </Text>
+                                    <Text style={[styles.tableCell, styles.dayCellText, { width: 180, color: colors.text }]}>
+                                      {exItem.name}
+                                    </Text>
+                                    <Text style={[styles.tableCell, { width: 170, color: colors.primary, fontWeight: '700' }]}>
+                                      {exItem.timing}
+                                      {'\n'}
+                                      <Text style={{ color: colors.textSecondary, fontWeight: '500', fontSize: 10 }}>
+                                        ⏱️ {exItem.duration}
+                                      </Text>
+                                    </Text>
+                                    <Text style={[styles.tableCell, { width: 260, color: colors.textSecondary }]}>
+                                      {exItem.routine}
+                                    </Text>
+                                    <Text style={[styles.tableCell, { width: 180, color: colors.success, fontWeight: '600' }]}>
+                                      {exItem.benefits}
+                                    </Text>
+                                  </View>
+                                ))}
+                              </View>
+                            </ScrollView>
+                          </View>
+                        )}
+                      </View>
+                    ) : (
+                      /* Standard Bot or User Text Bubble */
+                      <View
+                        style={[
+                          styles.messageBubble,
+                          isBot
+                            ? [
+                                styles.botBubble,
+                                {
+                                  backgroundColor: isDark ? colors.surfaceElevated : '#FFFFFF',
+                                  borderColor: colors.border,
+                                },
+                              ]
+                            : [
+                                styles.userBubble,
+                                {
+                                  backgroundColor: colors.primary,
+                                },
+                              ],
+                        ]}>
+                        <Text
+                          style={[
+                            styles.messageText,
+                            {
+                              color: isBot ? colors.text : '#FFFFFF',
+                            },
+                          ]}>
+                          {msg.text}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Interactive MCQ Option Chips (shown right below the corresponding question) */}
+                    {msg.isQuestion &&
+                      msg.questionIndex !== undefined &&
+                      msg.questionIndex === currentQuestionIndex &&
+                      !assessmentComplete && (
+                        <View style={styles.optionsGrid}>
+                          {PREDEFINED_QUESTIONS[msg.questionIndex].options.map((option) => {
+                            const optionFullLabel = `${option.icon ? option.icon + ' ' : ''}${option.label}`;
+                            const isSelected = selectedOptions.includes(optionFullLabel);
+
+                            return (
+                              <Pressable
+                                key={option.id}
+                                onPress={() =>
+                                  toggleOption(
+                                    PREDEFINED_QUESTIONS[msg.questionIndex!],
+                                    optionFullLabel
+                                  )
+                                }
+                                style={({ pressed }) => [
+                                  styles.optionCard,
+                                  {
+                                    backgroundColor: isSelected
+                                      ? (isDark ? colors.primaryLight : '#EFF6FF')
+                                      : (isDark ? colors.surfaceHighlight : '#FFFFFF'),
+                                    borderColor: isSelected
+                                      ? colors.primary
+                                      : (pressed ? colors.primary : colors.border),
+                                    borderWidth: isSelected ? 2 : 1,
+                                    opacity: pressed ? 0.85 : 1,
+                                  },
+                                ]}>
+                                <View style={styles.optionContentRow}>
+                                  {/* Selection Checkbox */}
+                                  <View
+                                    style={[
+                                      styles.checkboxCircle,
+                                      {
+                                        backgroundColor: isSelected ? colors.primary : 'transparent',
+                                        borderColor: isSelected ? colors.primary : colors.border,
+                                      },
+                                    ]}>
+                                    {isSelected && <CheckIcon size={11} color="#FFFFFF" />}
+                                  </View>
+
+                                  {option.icon && (
+                                    <Text style={styles.optionIcon}>{option.icon}</Text>
+                                  )}
+                                  <View style={styles.optionTextCol}>
+                                    <Text
+                                      style={[
+                                        styles.optionLabel,
+                                        {
+                                          color: isSelected ? colors.primary : colors.text,
+                                          fontWeight: isSelected ? '800' : '600',
+                                        },
+                                      ]}>
+                                      {option.label}
+                                    </Text>
+                                    {option.sublabel && (
+                                      <Text
+                                        style={[
+                                          styles.optionSublabel,
+                                          { color: colors.textSecondary },
+                                        ]}>
+                                        {option.sublabel}
+                                      </Text>
+                                    )}
+                                  </View>
+                                </View>
+                              </Pressable>
+                            );
+                          })}
+
+                          {/* Confirm & Continue Button for Current Question */}
+                          <Pressable
+                            onPress={() => confirmAndProceed(PREDEFINED_QUESTIONS[msg.questionIndex!])}
+                            disabled={selectedOptions.length === 0}
+                            style={[
+                              styles.confirmSelectionBtn,
+                              {
+                                backgroundColor:
+                                  selectedOptions.length > 0
+                                    ? colors.primary
+                                    : (isDark ? colors.surfaceHighlight : '#CBD5E1'),
+                                opacity: selectedOptions.length > 0 ? 1 : 0.6,
+                              },
+                            ]}>
+                            <Text style={styles.confirmSelectionBtnText}>
+                              {selectedOptions.length > 0
+                                ? `✓ Confirm & Continue (${selectedOptions.length} Selected) ➔`
+                                : (PREDEFINED_QUESTIONS[msg.questionIndex!].isMultiSelect
+                                    ? 'Select 1 or more options above'
+                                    : 'Select an option to continue')}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      )}
+                  </View>
+                </View>
+              );
+            })}
+
+            {/* Generate Plan Button when all 10 questions are answered */}
+            {assessmentComplete && !messages.some((m) => m.isDietPlan) && (
+              <View style={styles.generateCardWrapper}>
+                <Pressable
+                  onPress={handleGeneratePlan}
+                  disabled={generating}
+                  style={[
+                    styles.generatePlanBtn,
+                    {
+                      backgroundColor: colors.primary,
+                      opacity: generating ? 0.7 : 1,
+                    },
+                  ]}>
+                  {generating ? (
+                    <View style={styles.loadingRow}>
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                      <Text style={styles.generateBtnText}>
+                        ✨ Formulating your personalized plan with Gemini AI...
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={styles.loadingRow}>
+                      <SparklesIcon size={18} color="#FFFFFF" />
+                      <Text style={styles.generateBtnText}>
+                        🚀 Generate My Diet & Exercise Plan Now
+                      </Text>
+                    </View>
+                  )}
+                </Pressable>
+              </View>
+            )}
+
+            {/* Loading Indicator for Follow-up Chat */}
+            {followUpLoading && (
+              <View style={[styles.messageRow, styles.botMessageRow]}>
                 <View style={[styles.botAvatar, { backgroundColor: colors.primaryLight }]}>
                   <DietIcon size={16} color={colors.primary} />
                 </View>
-              )}
-
-              <View
-                style={[
-                  styles.bubbleWrapper,
-                  { maxWidth: isMobile ? '96%' : '85%' },
-                  !isBot && { alignItems: 'flex-end' },
-                ]}>
-                {/* Diet Plan Card: Clean summary with PDF download and NO wall of text preview */}
-                {msg.isDietPlan && msg.planData ? (
-                  <View
-                    style={[
-                      styles.planContainerCard,
-                      {
-                        backgroundColor: isDark ? colors.surfaceElevated : '#FFFFFF',
-                        borderColor: colors.border,
-                      },
-                    ]}>
-                    {/* Header with Classification Badge */}
-                    <View style={styles.planCardHeader}>
-                      <View
-                        style={[
-                          styles.categoryTag,
-                          {
-                            backgroundColor:
-                              msg.dietCategory === 'GAIN DIET'
-                                ? '#065F46'
-                                : msg.dietCategory === 'LOSS DIET'
-                                ? '#9A3412'
-                                : '#1E40AF',
-                          },
-                        ]}>
-                        <Text style={styles.categoryTagText}>
-                          🎯 {msg.dietCategory}
-                        </Text>
-                      </View>
-                      <Text style={[styles.planSuccessTitle, { color: colors.text }]}>
-                        7-Day Nutrition & Fitness Schedule Formulated
-                      </Text>
-                    </View>
-
-                    {/* Concise Summary without essays */}
-                    <Text style={[styles.planSummaryText, { color: colors.textSecondary }]}>
-                      {msg.planData.summary}
-                    </Text>
-
-                    {/* Highlights Badges */}
-                    <View style={styles.highlightsGrid}>
-                      <View style={[styles.highlightPill, { backgroundColor: isDark ? colors.surfaceHighlight : '#F1F5F9' }]}>
-                        <Text style={styles.highlightEmoji}>🍽️</Text>
-                        <Text style={[styles.highlightText, { color: colors.text }]}>
-                          Table 1: 7-Day Food Schedule (Breakfast to Dinner)
-                        </Text>
-                      </View>
-                      <View style={[styles.highlightPill, { backgroundColor: isDark ? colors.surfaceHighlight : '#F1F5F9' }]}>
-                        <Text style={styles.highlightEmoji}>🧘</Text>
-                        <Text style={[styles.highlightText, { color: colors.text }]}>
-                          Table 2: 3-4 Daily Exercises with Yoga & Meditation
-                        </Text>
-                      </View>
-                      <View style={[styles.highlightPill, { backgroundColor: isDark ? colors.surfaceHighlight : '#F1F5F9' }]}>
-                        <Text style={styles.highlightEmoji}>💰</Text>
-                        <Text style={[styles.highlightText, { color: colors.text }]}>
-                          Middle-Class Affordable Staples (Dal, Roti, Rice, Sattu, Besan, Sabzi)
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Action Buttons: PDF Download is primary */}
-                    <View style={styles.planPrimaryActions}>
-                      <Pressable
-                        onPress={() => printOrSavePdf(msg.planData, msg.dietCategory)}
-                        style={[styles.pdfPrimaryBtn, { backgroundColor: colors.primary }]}>
-                        <FileTextIcon size={18} color="#FFFFFF" />
-                        <Text style={styles.pdfPrimaryBtnText}>
-                          📄 Download / Print Plan as PDF
-                        </Text>
-                      </Pressable>
-
-                      <View style={styles.planSecondaryRow}>
-                        <Pressable
-                          onPress={() => downloadPlanFile(msg.planData, msg.dietCategory)}
-                          style={[
-                            styles.actionBtn,
-                            {
-                              backgroundColor: isDark ? colors.surfaceHighlight : '#F8FAFC',
-                              borderColor: colors.border,
-                            },
-                          ]}>
-                          <DownloadIcon size={14} color={colors.primary} />
-                          <Text style={[styles.actionBtnText, { color: colors.primary }]}>
-                            Save PDF Plan
-                          </Text>
-                        </Pressable>
-
-                        <Pressable
-                          onPress={() => toggleTablePreview(msg.id)}
-                          style={[
-                            styles.actionBtn,
-                            {
-                              backgroundColor: isDark ? colors.surfaceHighlight : '#F8FAFC',
-                              borderColor: colors.border,
-                            },
-                          ]}>
-                          <Text style={{ fontSize: 13 }}>{tablePreviewOpen[msg.id] === false ? '👁️' : '🙈'}</Text>
-                          <Text style={[styles.actionBtnText, { color: colors.text }]}>
-                            {tablePreviewOpen[msg.id] === false ? 'Show Tables' : 'Collapse Tables'}
-                          </Text>
-                        </Pressable>
-
-                        <Pressable
-                          onPress={() => copyToClipboard(formatPlanAsHumanReadableText(msg.planData!))}
-                          style={[
-                            styles.actionBtn,
-                            {
-                              backgroundColor: isDark ? colors.surfaceHighlight : '#F8FAFC',
-                              borderColor: colors.border,
-                            },
-                          ]}>
-                          {copiedPlan ? (
-                            <>
-                              <CheckIcon size={14} color={colors.success} />
-                              <Text style={[styles.actionBtnText, { color: colors.success }]}>
-                                Copied Text!
-                              </Text>
-                            </>
-                          ) : (
-                            <>
-                              <CopyIcon size={14} color={colors.textSecondary} />
-                              <Text style={[styles.actionBtnText, { color: colors.textSecondary }]}>
-                                Copy Readable Text
-                              </Text>
-                            </>
-                          )}
-                        </Pressable>
-                      </View>
-                    </View>
-
-                    {/* In-app Table Preview (Visible by default in human-readable format) */}
-                    {tablePreviewOpen[msg.id] !== false && (
-                      <View style={styles.tablePreviewContainer}>
-                        {/* Table 1: Food Schedule */}
-                        <Text style={[styles.tableSectionTitle, { color: colors.text }]}>
-                          🍽️ Table 1: 7-Day Food Schedule
-                        </Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={true} style={styles.tableScroll}>
-                          <View style={styles.tableBox}>
-                            <View style={[styles.tableRow, styles.tableHeaderRow]}>
-                              <Text style={[styles.tableHeaderCell, { width: 90 }]}>Day</Text>
-                              <Text style={[styles.tableHeaderCell, { width: 140 }]}>🌅 Early Morning</Text>
-                              <Text style={[styles.tableHeaderCell, { width: 150 }]}>🥣 Breakfast</Text>
-                              <Text style={[styles.tableHeaderCell, { width: 140 }]}>🍎 Mid-Morning</Text>
-                              <Text style={[styles.tableHeaderCell, { width: 180 }]}>🍛 Lunch</Text>
-                              <Text style={[styles.tableHeaderCell, { width: 140 }]}>☕ Evening Snack</Text>
-                              <Text style={[styles.tableHeaderCell, { width: 180 }]}>🍲 Dinner</Text>
-                              <Text style={[styles.tableHeaderCell, { width: 130 }]}>🥛 Bedtime</Text>
-                            </View>
-                            {msg.planData.weeklyDiet.map((dayPlan, dIdx) => (
-                              <View
-                                key={dIdx}
-                                style={[
-                                  styles.tableRow,
-                                  { backgroundColor: dIdx % 2 === 0 ? (isDark ? colors.surface : '#FFFFFF') : (isDark ? colors.surfaceHighlight : '#F8FAFC') },
-                                ]}>
-                                <Text style={[styles.tableCell, styles.dayCellText, { width: 90, color: colors.text }]}>{dayPlan.day}</Text>
-                                <Text style={[styles.tableCell, { width: 140, color: colors.textSecondary }]}>{dayPlan.earlyMorning}</Text>
-                                <Text style={[styles.tableCell, { width: 150, color: colors.textSecondary }]}>{dayPlan.breakfast}</Text>
-                                <Text style={[styles.tableCell, { width: 140, color: colors.textSecondary }]}>{dayPlan.midMorning}</Text>
-                                <Text style={[styles.tableCell, { width: 180, color: colors.text, fontWeight: '600' }]}>{dayPlan.lunch}</Text>
-                                <Text style={[styles.tableCell, { width: 140, color: colors.textSecondary }]}>{dayPlan.eveningSnack}</Text>
-                                <Text style={[styles.tableCell, { width: 180, color: colors.text, fontWeight: '600' }]}>{dayPlan.dinner}</Text>
-                                <Text style={[styles.tableCell, { width: 130, color: colors.textSecondary }]}>{dayPlan.bedtime}</Text>
-                              </View>
-                            ))}
-                          </View>
-                        </ScrollView>
-
-                        {/* Table 2: 3-4 Focused Daily Exercises with Yoga & Meditation */}
-                        <Text style={[styles.tableSectionTitle, { color: colors.text, marginTop: Spacing.four }]}>
-                          🧘 Table 2: Daily Exercises with Yoga & Meditation (3-4 Focus Routines)
-                        </Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={true} style={styles.tableScroll}>
-                          <View style={styles.tableBox}>
-                            <View style={[styles.tableRow, styles.tableHeaderRow]}>
-                              <Text style={[styles.tableHeaderCell, { width: 40, textAlign: 'center' }]}>#</Text>
-                              <Text style={[styles.tableHeaderCell, { width: 180 }]}>Exercise / Yoga Routine</Text>
-                              <Text style={[styles.tableHeaderCell, { width: 170 }]}>⏰ Timings & Duration</Text>
-                              <Text style={[styles.tableHeaderCell, { width: 260 }]}>Specific Routine Steps</Text>
-                              <Text style={[styles.tableHeaderCell, { width: 180 }]}>Primary Benefit</Text>
-                            </View>
-                            {(msg.planData.exercises && msg.planData.exercises.length > 0
-                              ? msg.planData.exercises
-                              : [
-                                  {
-                                    name: 'Surya Namaskar & Yoga Asanas',
-                                    timing: '6:30 AM - 6:50 AM (Morning)',
-                                    duration: '15-20 Mins',
-                                    routine: '5-7 rounds Surya Namaskar + Tadasana, Bhujangasana & Vrikshasana',
-                                    benefits: 'Spine flexibility, joint mobility & core strength',
-                                  },
-                                  {
-                                    name: 'Brisk Walking / Light Jogging',
-                                    timing: '6:50 AM - 7:15 AM or Evening 5:30 PM',
-                                    duration: '20-25 Mins',
-                                    routine: 'Continuous brisk walking (3,000-4,000 steps) at steady pace',
-                                    benefits: 'Cardiovascular heart conditioning & active calorie burn',
-                                  },
-                                  {
-                                    name: 'Pranayama (Breathing Exercises)',
-                                    timing: '7:15 AM - 7:25 AM',
-                                    duration: '10 Mins',
-                                    routine: '5 mins Anulom Vilom + 5 mins gentle Kapalbhati',
-                                    benefits: 'Lung capacity expansion & nervous system balance',
-                                  },
-                                  {
-                                    name: 'Mindfulness Meditation & Relaxation',
-                                    timing: '9:30 PM - 9:45 PM (Bedtime)',
-                                    duration: '10-15 Mins',
-                                    routine: 'Silent breath observation, 4-4-4-4 box breathing & Shavasana',
-                                    benefits: 'Lowers cortisol, calms mind & ensures deep restful sleep',
-                                  },
-                                ]
-                            ).map((exItem, eIdx) => (
-                              <View
-                                key={eIdx}
-                                style={[
-                                  styles.tableRow,
-                                  {
-                                    backgroundColor:
-                                      eIdx % 2 === 0
-                                        ? (isDark ? colors.surface : '#FFFFFF')
-                                        : (isDark ? colors.surfaceHighlight : '#F8FAFC'),
-                                  },
-                                ]}>
-                                <Text
-                                  style={[
-                                    styles.tableCell,
-                                    { width: 40, textAlign: 'center', color: colors.primary, fontWeight: '700' },
-                                  ]}>
-                                  {eIdx + 1}
-                                </Text>
-                                <Text style={[styles.tableCell, styles.dayCellText, { width: 180, color: colors.text }]}>
-                                  {exItem.name}
-                                </Text>
-                                <Text style={[styles.tableCell, { width: 170, color: colors.primary, fontWeight: '700' }]}>
-                                  {exItem.timing}
-                                  {'\n'}
-                                  <Text style={{ color: colors.textSecondary, fontWeight: '500', fontSize: 10 }}>
-                                    ⏱️ {exItem.duration}
-                                  </Text>
-                                </Text>
-                                <Text style={[styles.tableCell, { width: 260, color: colors.textSecondary }]}>
-                                  {exItem.routine}
-                                </Text>
-                                <Text style={[styles.tableCell, { width: 180, color: colors.success, fontWeight: '600' }]}>
-                                  {exItem.benefits}
-                                </Text>
-                              </View>
-                            ))}
-                          </View>
-                        </ScrollView>
-                      </View>
-                    )}
-                  </View>
-                ) : (
-                  /* Standard Bot or User Text Bubble */
-                  <View
-                    style={[
-                      styles.messageBubble,
-                      isBot
-                        ? [
-                            styles.botBubble,
-                            {
-                              backgroundColor: isDark ? colors.surfaceElevated : '#FFFFFF',
-                              borderColor: colors.border,
-                            },
-                          ]
-                        : [
-                            styles.userBubble,
-                            {
-                              backgroundColor: colors.primary,
-                            },
-                          ],
-                    ]}>
-                    <Text
-                      style={[
-                        styles.messageText,
-                        {
-                          color: isBot ? colors.text : '#FFFFFF',
-                        },
-                      ]}>
-                      {msg.text}
+                <View
+                  style={[
+                    styles.messageBubble,
+                    styles.botBubble,
+                    {
+                      backgroundColor: isDark ? colors.surfaceElevated : '#FFFFFF',
+                      borderColor: colors.border,
+                    },
+                  ]}>
+                  <View style={styles.loadingRow}>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                    <Text style={[styles.generatingText, { color: colors.textSecondary }]}>
+                      Consulting Gemini AI Nutritionist...
                     </Text>
                   </View>
-                )}
-
-                {/* Interactive MCQ Option Chips (shown right below the corresponding question) */}
-                {msg.isQuestion &&
-                  msg.questionIndex !== undefined &&
-                  msg.questionIndex === currentQuestionIndex &&
-                  !assessmentComplete && (
-                    <View style={styles.optionsGrid}>
-                      {PREDEFINED_QUESTIONS[msg.questionIndex].options.map((option) => {
-                        const optionFullLabel = `${option.icon ? option.icon + ' ' : ''}${option.label}`;
-                        const isSelected = selectedOptions.includes(optionFullLabel);
-
-                        return (
-                          <Pressable
-                            key={option.id}
-                            onPress={() =>
-                              toggleOption(
-                                PREDEFINED_QUESTIONS[msg.questionIndex!],
-                                optionFullLabel
-                              )
-                            }
-                            style={({ pressed }) => [
-                              styles.optionCard,
-                              {
-                                backgroundColor: isSelected
-                                  ? (isDark ? colors.primaryLight : '#EFF6FF')
-                                  : (isDark ? colors.surfaceHighlight : '#FFFFFF'),
-                                borderColor: isSelected
-                                  ? colors.primary
-                                  : (pressed ? colors.primary : colors.border),
-                                borderWidth: isSelected ? 2 : 1,
-                                opacity: pressed ? 0.85 : 1,
-                              },
-                            ]}>
-                            <View style={styles.optionContentRow}>
-                              {/* Selection Checkbox */}
-                              <View
-                                style={[
-                                  styles.checkboxCircle,
-                                  {
-                                    backgroundColor: isSelected ? colors.primary : 'transparent',
-                                    borderColor: isSelected ? colors.primary : colors.border,
-                                  },
-                                ]}>
-                                {isSelected && <CheckIcon size={11} color="#FFFFFF" />}
-                              </View>
-
-                              {option.icon && (
-                                <Text style={styles.optionIcon}>{option.icon}</Text>
-                              )}
-                              <View style={styles.optionTextCol}>
-                                <Text
-                                  style={[
-                                    styles.optionLabel,
-                                    {
-                                      color: isSelected ? colors.primary : colors.text,
-                                      fontWeight: isSelected ? '800' : '600',
-                                    },
-                                  ]}>
-                                  {option.label}
-                                </Text>
-                                {option.sublabel && (
-                                  <Text
-                                    style={[
-                                      styles.optionSublabel,
-                                      { color: colors.textSecondary },
-                                    ]}>
-                                    {option.sublabel}
-                                  </Text>
-                                )}
-                              </View>
-                            </View>
-                          </Pressable>
-                        );
-                      })}
-
-                      {/* Confirm & Continue Button for Current Question */}
-                      <Pressable
-                        onPress={() => confirmAndProceed(PREDEFINED_QUESTIONS[msg.questionIndex!])}
-                        disabled={selectedOptions.length === 0}
-                        style={[
-                          styles.confirmSelectionBtn,
-                          {
-                            backgroundColor:
-                              selectedOptions.length > 0
-                                ? colors.primary
-                                : (isDark ? colors.surfaceHighlight : '#CBD5E1'),
-                            opacity: selectedOptions.length > 0 ? 1 : 0.6,
-                          },
-                        ]}>
-                        <Text style={styles.confirmSelectionBtnText}>
-                          {selectedOptions.length > 0
-                            ? `✓ Confirm & Continue (${selectedOptions.length} Selected) ➔`
-                            : (PREDEFINED_QUESTIONS[msg.questionIndex!].isMultiSelect
-                                ? 'Select 1 or more options above'
-                                : 'Select an option to continue')}
-                        </Text>
-                      </Pressable>
-                    </View>
-                  )}
+                </View>
               </View>
-            </View>
-          );
-        })}
+            )}
+          </ScrollView>
 
-        {/* Generate Plan Button when all 10 questions are answered */}
-        {assessmentComplete && !messages.some((m) => m.isDietPlan) && (
-          <View style={styles.generateCardWrapper}>
-            <Pressable
-              onPress={handleGeneratePlan}
-              disabled={generating}
-              style={[
-                styles.generatePlanBtn,
-                {
-                  backgroundColor: colors.primary,
-                  opacity: generating ? 0.7 : 1,
-                },
-              ]}>
-              {generating ? (
-                <View style={styles.loadingRow}>
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                  <Text style={styles.generateBtnText}>
-                    ✨ Formulating your personalized plan with Gemini AI...
-                  </Text>
-                </View>
-              ) : (
-                <View style={styles.loadingRow}>
-                  <SparklesIcon size={18} color="#FFFFFF" />
-                  <Text style={styles.generateBtnText}>
-                    🚀 Generate My Diet & Exercise Plan Now
-                  </Text>
-                </View>
-              )}
-            </Pressable>
-          </View>
-        )}
-
-        {/* Loading Indicator for Follow-up Chat */}
-        {followUpLoading && (
-          <View style={[styles.messageRow, styles.botMessageRow]}>
-            <View style={[styles.botAvatar, { backgroundColor: colors.primaryLight }]}>
-              <DietIcon size={16} color={colors.primary} />
-            </View>
+          {/* Bottom Follow-Up Text Input Bar (Active once plan is generated) */}
+          {messages.some((m) => m.isDietPlan) && (
             <View
               style={[
-                styles.messageBubble,
-                styles.botBubble,
+                styles.inputBar,
                 {
                   backgroundColor: isDark ? colors.surfaceElevated : '#FFFFFF',
-                  borderColor: colors.border,
+                  borderTopColor: colors.border,
                 },
               ]}>
-              <View style={styles.loadingRow}>
-                <ActivityIndicator size="small" color={colors.primary} />
-                <Text style={[styles.generatingText, { color: colors.textSecondary }]}>
-                  Consulting Gemini AI Nutritionist...
-                </Text>
-              </View>
+              <TextInput
+                value={followUpInput}
+                onChangeText={setFollowUpInput}
+                placeholder="Ask follow-up questions (e.g. swap curd, knee-friendly yoga)..."
+                placeholderTextColor={colors.textMuted}
+                onSubmitEditing={handleSendFollowUp}
+                returnKeyType="send"
+                style={[
+                  styles.textInput,
+                  {
+                    backgroundColor: isDark ? colors.surfaceHighlight : '#F8FAFC',
+                    color: colors.text,
+                    borderColor: colors.border,
+                  },
+                ]}
+              />
+              <Pressable
+                onPress={handleSendFollowUp}
+                disabled={!followUpInput.trim() || followUpLoading}
+                style={[
+                  styles.sendBtn,
+                  {
+                    backgroundColor:
+                      followUpInput.trim() && !followUpLoading
+                        ? colors.primary
+                        : isDark
+                        ? colors.surfaceHighlight
+                        : '#E2E8F0',
+                  },
+                ]}>
+                <SendIcon
+                  size={18}
+                  color={followUpInput.trim() && !followUpLoading ? '#FFFFFF' : colors.textMuted}
+                />
+              </Pressable>
             </View>
-          </View>
-        )}
-      </ScrollView>
-
-      {/* Bottom Follow-Up Text Input Bar (Active once plan is generated) */}
-      {messages.some((m) => m.isDietPlan) && (
-        <View
-          style={[
-            styles.inputBar,
-            {
-              backgroundColor: isDark ? colors.surfaceElevated : '#FFFFFF',
-              borderTopColor: colors.border,
-            },
-          ]}>
-          <TextInput
-            value={followUpInput}
-            onChangeText={setFollowUpInput}
-            placeholder="Ask follow-up questions (e.g. swap curd, knee-friendly yoga)..."
-            placeholderTextColor={colors.textMuted}
-            onSubmitEditing={handleSendFollowUp}
-            returnKeyType="send"
-            style={[
-              styles.textInput,
-              {
-                backgroundColor: isDark ? colors.surfaceHighlight : '#F8FAFC',
-                color: colors.text,
-                borderColor: colors.border,
-              },
-            ]}
-          />
-          <Pressable
-            onPress={handleSendFollowUp}
-            disabled={!followUpInput.trim() || followUpLoading}
-            style={[
-              styles.sendBtn,
-              {
-                backgroundColor:
-                  followUpInput.trim() && !followUpLoading
-                    ? colors.primary
-                    : isDark
-                    ? colors.surfaceHighlight
-                    : '#E2E8F0',
-              },
-            ]}>
-            <SendIcon
-              size={18}
-              color={followUpInput.trim() && !followUpLoading ? '#FFFFFF' : colors.textMuted}
-            />
-          </Pressable>
-        </View>
+          )}
+        </>
       )}
     </View>
   );
@@ -1404,5 +1881,140 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  tabBar: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+  },
+  tabItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: Spacing.three,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  activeTabItem: {
+    borderBottomWidth: 2,
+  },
+  tabText: {
+    fontSize: 13,
+  },
+  savedTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.three,
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+  },
+  savedHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  savedHeaderSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  generateNewBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 8,
+    borderRadius: BorderRadius.md,
+  },
+  generateNewBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  savedPlanCard: {
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    padding: Spacing.three,
+    marginBottom: Spacing.three,
+  },
+  savedPlanHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  savedPlanTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  categoryBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.sm,
+  },
+  categoryBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  savedPlanDate: {
+    fontSize: 11,
+    marginTop: 4,
+  },
+  savedPlanSummary: {
+    fontSize: 12,
+    marginTop: 6,
+    lineHeight: 18,
+  },
+  savedActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    marginTop: Spacing.three,
+    paddingTop: Spacing.two,
+    borderTopWidth: 1,
+    flexWrap: 'wrap',
+  },
+  savedActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.md,
+  },
+  savedActionBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  savedDeleteBtn: {
+    padding: 6,
+    marginLeft: 'auto',
+  },
+  emptySavedBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.five,
+    marginTop: Spacing.four,
+    gap: Spacing.two,
+  },
+  emptySavedTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginTop: Spacing.two,
+  },
+  emptySavedSubtitle: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 20,
+    maxWidth: 320,
+  },
+  emptyActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.three,
+    borderRadius: BorderRadius.lg,
+    marginTop: Spacing.two,
   },
 });

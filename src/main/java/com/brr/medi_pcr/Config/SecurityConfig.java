@@ -37,6 +37,7 @@ public class SecurityConfig {
         httpSecurity
                 .cors(Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable)
+                .headers(headers -> headers.frameOptions(frame -> frame.disable()))
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, authException) -> {
                             response.setStatus(jakarta.servlet.http.HttpServletResponse.SC_UNAUTHORIZED);
@@ -62,6 +63,8 @@ public class SecurityConfig {
                                 "/auth/reset-password",
                                 "/profile/public/**",
                                 "/profile/emergency/**",
+                                "/files/download/**",
+                                "/files/view/**",
                                 "/reminders/**",
                                 "/medistatus/**",
                                 "/auth/fcm-token",

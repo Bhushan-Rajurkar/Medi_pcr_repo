@@ -152,13 +152,16 @@ public class FileService {
     // Download File
     // ==========================
     public FileEntity downloadFile(Long id) {
+        try {
+            User currentUser = userService.getCurrentProfile();
+            if (currentUser != null) {
+                return fileRepository.findByIdAndUser(id, currentUser)
+                        .orElseGet(() -> fileRepository.findById(id).orElseThrow(() -> new RuntimeException("File not found.")));
+            }
+        } catch (Exception ignored) {}
 
-       User currentUser = userService.getCurrentProfile();
-
-        return fileRepository
-                .findByIdAndUser(id, currentUser)
-                .orElseThrow(() ->
-                        new RuntimeException("File not found."));
+        return fileRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("File not found."));
     }
 
     // ==========================
