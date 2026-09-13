@@ -16,11 +16,12 @@ export interface MedicalFile {
 export const fileService = {
   // Upload a medical report/file
   async uploadFile(file: File | Blob | PickedFile, fileName?: string): Promise<MedicalFile> {
+    const reportTitle = (fileName && fileName.trim()) || ('name' in file ? (file as any).name : 'Medical Report');
     const formData = new FormData();
     filePicker.appendFile(formData, 'file', file as any);
-    if (fileName && fileName.trim()) {
-      formData.append('fileName', fileName.trim());
-      formData.append('name', fileName.trim());
+    if (reportTitle) {
+      formData.append('fileName', reportTitle);
+      formData.append('name', reportTitle);
     }
 
     const res = await api.postMultipart<MedicalFile>('/files/upload', formData);

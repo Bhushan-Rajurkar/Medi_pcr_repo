@@ -49,6 +49,14 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
 
   // Cross-platform document picker handler (Android, iOS, Web)
   const handlePickDocument = async () => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const input = document.getElementById('medical-file-upload-input') as HTMLInputElement;
+      if (input) {
+        input.click();
+        return;
+      }
+    }
+
     try {
       const picked = await filePicker.pickDocument();
       if (picked) {
@@ -113,17 +121,8 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
       </Text>
 
       {/* Step 1: Universal File Selector Button & Dropzone (Android, iOS & Web) */}
-      <Pressable
-        onPress={handlePickDocument}
-        style={({ pressed }) => [
-          styles.dropZone,
-          {
-            backgroundColor: isDark ? colors.surfaceHighlight : colors.surface,
-            borderColor: selectedFile ? colors.primary : colors.border,
-            opacity: pressed ? 0.85 : 1,
-          },
-        ]}>
-        {Platform.OS === 'web' && (
+      {Platform.OS === 'web' ? (
+        <div>
           <input
             type="file"
             id="medical-file-upload-input"
@@ -142,25 +141,67 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
               }
             }}
           />
-        )}
-        <View style={styles.dropZoneContent}>
-          <UploadCloudIcon size={42} color={colors.primary} />
-          <Text
+          <label
+            htmlFor="medical-file-upload-input"
             style={{
-              fontSize: 15,
-              fontWeight: '700',
-              color: colors.primary,
-              marginTop: 8,
-              marginBottom: 4,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '24px 16px',
+              border: `2px dashed ${selectedFile ? colors.primary : colors.border}`,
+              borderRadius: BorderRadius.lg,
+              backgroundColor: isDark ? colors.surfaceHighlight : colors.surface,
+              cursor: 'pointer',
+              marginBottom: Spacing.two,
               textAlign: 'center',
             }}>
-            {selectedFile ? '🔄 Choose a Different File' : '📁 Tap to Browse File / Document'}
-          </Text>
-          <Text style={{ fontSize: 12, color: colors.textMuted, textAlign: 'center' }}>
-            Supports PDF, PNG, JPG, DOCX, TXT, CSV (up to 100MB)
-          </Text>
-        </View>
-      </Pressable>
+            <UploadCloudIcon size={42} color={colors.primary} />
+            <span
+              style={{
+                fontSize: 15,
+                fontWeight: 700,
+                color: colors.primary,
+                marginTop: 8,
+                marginBottom: 4,
+              }}>
+              {selectedFile ? '🔄 Choose a Different File' : '📁 Tap to Browse File / Document'}
+            </span>
+            <span style={{ fontSize: 12, color: colors.textMuted }}>
+              Supports PDF, PNG, JPG, DOCX, TXT, CSV (up to 100MB)
+            </span>
+          </label>
+        </div>
+      ) : (
+        <Pressable
+          onPress={handlePickDocument}
+          style={({ pressed }) => [
+            styles.dropZone,
+            {
+              backgroundColor: isDark ? colors.surfaceHighlight : colors.surface,
+              borderColor: selectedFile ? colors.primary : colors.border,
+              opacity: pressed ? 0.85 : 1,
+            },
+          ]}>
+          <View style={styles.dropZoneContent}>
+            <UploadCloudIcon size={42} color={colors.primary} />
+            <Text
+              style={{
+                fontSize: 15,
+                fontWeight: '700',
+                color: colors.primary,
+                marginTop: 8,
+                marginBottom: 4,
+                textAlign: 'center',
+              }}>
+              {selectedFile ? '🔄 Choose a Different File' : '📁 Tap to Browse File / Document'}
+            </Text>
+            <Text style={{ fontSize: 12, color: colors.textMuted, textAlign: 'center' }}>
+              Supports PDF, PNG, JPG, DOCX, TXT, CSV (up to 100MB)
+            </Text>
+          </View>
+        </Pressable>
+      )}
 
       {/* Selected File Details Banner */}
       {selectedFile && (

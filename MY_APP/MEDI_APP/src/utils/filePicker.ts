@@ -135,20 +135,50 @@ export const filePicker = {
   appendFile(formData: FormData, fieldName: string, picked: PickedFile | File) {
     if (Platform.OS === 'web') {
       if (picked instanceof File) {
-        formData.append(fieldName, picked);
+        formData.append(fieldName, picked, picked.name);
         return;
       }
-      if (picked.file instanceof File) {
-        formData.append(fieldName, picked.file);
+      if (picked && (picked as PickedFile).file instanceof File) {
+        formData.append(fieldName, (picked as PickedFile).file!, (picked as PickedFile).name);
+        return;
+      }
+
+      // If on Web and picked is a PickedFile with uri or base64
+      if (typeof window !== 'undefined') {
+        const pickedFile = picked as PickedFile;
+        // If we have a base64 string
+        if (pickedFile.base64) {
+          try {
+            const byteCharacters = atob(pickedFile.base64);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+              byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], { type: pickedFile.mimeType || 'application/octet-stream' });
+            formData.append(fieldName, blob, pickedFile.name || 'file');
+            return;
+          } catch (e) {
+            console.warn('Base64 decode failed for web formData:', e);
+          }
+        }
+
+        // Try synchronous or native File object fallback if possible
+        const blob = new Blob([], { type: pickedFile.mimeType || 'application/octet-stream' });
+        const fallbackFile = new File([blob], pickedFile.name || 'file', {
+          type: pickedFile.mimeType || 'application/octet-stream',
+        });
+        formData.append(fieldName, fallbackFile, pickedFile.name || 'file');
         return;
       }
     }
 
-    // Native mobile (Android / iOS) or web fallback
+    // Native mobile (Android / iOS): React Native requires { uri, name, type }
+    const pickedFile = picked as PickedFile;
     const nativeFile = {
-      uri: (picked as PickedFile).uri,
-      name: (picked as PickedFile).name || 'file',
-      type: (picked as PickedFile).mimeType || 'application/octet-stream',
+      uri: pickedFile.uri,
+      name: pickedFile.name || 'file',
+      type: pickedFile.mimeType || 'application/octet-stream',
     };
     formData.append(fieldName, nativeFile as any);
   },
