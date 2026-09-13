@@ -9,6 +9,7 @@ import {
   StyleProp,
 } from 'react-native';
 import { useAppTheme } from '@/context/ThemeContext';
+import { useResponsive } from '@/hooks/useResponsive';
 import { BorderRadius, Spacing } from '@/constants/theme';
 
 interface ButtonProps {
@@ -18,6 +19,7 @@ interface ButtonProps {
   size?: 'sm' | 'md' | 'lg';
   loading?: boolean;
   disabled?: boolean;
+  fullWidth?: boolean;
   style?: StyleProp<ViewStyle>;
   textStyle?: StyleProp<TextStyle>;
   icon?: React.ReactNode;
@@ -30,11 +32,13 @@ export const Button: React.FC<ButtonProps> = ({
   size = 'md',
   loading = false,
   disabled = false,
+  fullWidth = false,
   style,
   textStyle,
   icon,
 }) => {
   const { colors, isDark } = useAppTheme();
+  const { isSmallMobile, isMobile, buttonPaddingV, buttonPaddingH, buttonFontSize } = useResponsive();
 
   const getBackgroundColor = (pressed: boolean) => {
     if (disabled || loading) {
@@ -85,18 +89,9 @@ export const Button: React.FC<ButtonProps> = ({
     return 'transparent';
   };
 
-  const getSizeStyles = (): { paddingVertical: number; paddingHorizontal: number; fontSize: number } => {
-    switch (size) {
-      case 'sm':
-        return { paddingVertical: Spacing.one * 1.5, paddingHorizontal: Spacing.two * 1.5, fontSize: 13 };
-      case 'lg':
-        return { paddingVertical: Spacing.three, paddingHorizontal: Spacing.five, fontSize: 16 };
-      default:
-        return { paddingVertical: Spacing.two * 1.3, paddingHorizontal: Spacing.three * 1.5, fontSize: 14.5 };
-    }
-  };
-
-  const sizeStyles = getSizeStyles();
+  const responsivePadV = buttonPaddingV(size);
+  const responsivePadH = buttonPaddingH(size);
+  const responsiveFont = buttonFontSize(size);
 
   return (
     <Pressable
@@ -108,9 +103,11 @@ export const Button: React.FC<ButtonProps> = ({
           backgroundColor: getBackgroundColor(pressed),
           borderColor: getBorderColor(),
           borderWidth: variant === 'outline' || variant === 'secondary' ? 1 : 0,
-          paddingVertical: sizeStyles.paddingVertical,
-          paddingHorizontal: sizeStyles.paddingHorizontal,
+          paddingVertical: responsivePadV,
+          paddingHorizontal: responsivePadH,
           opacity: disabled ? 0.6 : 1,
+          width: fullWidth ? '100%' : undefined,
+          minHeight: isSmallMobile ? 36 : isMobile ? 40 : 38,
         },
         style,
       ]}>
@@ -120,12 +117,14 @@ export const Button: React.FC<ButtonProps> = ({
         <>
           {icon}
           <Text
+            numberOfLines={1}
+            ellipsizeMode="tail"
             style={[
               styles.text,
               {
                 color: getTextColor(),
-                fontSize: sizeStyles.fontSize,
-                marginLeft: icon ? Spacing.one * 1.5 : 0,
+                fontSize: responsiveFont,
+                marginLeft: icon ? (isSmallMobile ? 4 : Spacing.one * 1.5) : 0,
               },
               textStyle,
             ]}>
@@ -148,5 +147,6 @@ const styles = StyleSheet.create({
   text: {
     fontWeight: '600',
     textAlign: 'center',
+    flexShrink: 1,
   },
 });

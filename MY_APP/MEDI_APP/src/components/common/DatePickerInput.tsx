@@ -9,7 +9,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { useAppTheme } from '@/context/ThemeContext';
-import { BorderRadius, Spacing } from '@/constants/theme';
+import { BorderRadius, Spacing, Shadows } from '@/constants/theme';
 import {
   CalendarIcon,
   CheckIcon,
@@ -439,11 +439,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.xl,
     borderWidth: 1,
     padding: Spacing.four,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 14,
-    elevation: 8,
+    ...Shadows.lg,
   },
   modalHeader: {
     flexDirection: 'row',

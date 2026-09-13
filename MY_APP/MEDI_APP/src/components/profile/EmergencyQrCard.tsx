@@ -11,7 +11,8 @@ import { useAppTheme } from '@/context/ThemeContext';
 import { EmergencyProfile, profileService } from '@/services/profileService';
 import { Button } from '@/components/common/Button';
 import { Toast, ToastMessage } from '@/components/common/Toast';
-import { BorderRadius, Spacing } from '@/constants/theme';
+import { BorderRadius, Spacing, Shadows } from '@/constants/theme';
+import { useResponsive } from '@/hooks/useResponsive';
 import {
   QrCodeIcon,
   ShareIcon,
@@ -37,6 +38,7 @@ export const EmergencyQrCard: React.FC<EmergencyQrCardProps> = ({
   onProfileUpdated,
 }) => {
   const { colors, isDark } = useAppTheme();
+  const { isSmallMobile, isMobile } = useResponsive();
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [regenerating, setRegenerating] = useState(false);
   const isComplete = Boolean(
@@ -201,14 +203,18 @@ export const EmergencyQrCard: React.FC<EmergencyQrCardProps> = ({
             </View>
 
             {/* Quick Actions underneath QR */}
-            <View style={styles.qrActionsRow}>
+            <View
+              style={[
+                styles.qrActionsRow,
+                isSmallMobile && { flexDirection: 'column', alignItems: 'stretch', gap: 6 },
+              ]}>
               <Button
                 title="Share QR"
                 variant="primary"
                 size="sm"
                 icon={<ShareIcon size={14} color="#FFFFFF" />}
                 onPress={handleShare}
-                style={{ flex: 1 }}
+                style={{ flex: isSmallMobile ? undefined : 1 }}
               />
               <Button
                 title="Copy Link"
@@ -216,7 +222,7 @@ export const EmergencyQrCard: React.FC<EmergencyQrCardProps> = ({
                 size="sm"
                 icon={<CopyIcon size={14} color={colors.text} />}
                 onPress={() => copyToClipboard(emergencyUrl)}
-                style={{ flex: 1 }}
+                style={{ flex: isSmallMobile ? undefined : 1 }}
               />
               <Button
                 title="Download"
@@ -224,7 +230,7 @@ export const EmergencyQrCard: React.FC<EmergencyQrCardProps> = ({
                 size="sm"
                 icon={<DownloadIcon size={14} color={colors.primary} />}
                 onPress={handleDownload}
-                style={{ flex: 1 }}
+                style={{ flex: isSmallMobile ? undefined : 1 }}
               />
             </View>
           </View>
@@ -312,13 +318,17 @@ export const EmergencyQrCard: React.FC<EmergencyQrCardProps> = ({
             </View>
 
             {/* Bottom Buttons */}
-            <View style={styles.bottomControlRow}>
+            <View
+              style={[
+                styles.bottomControlRow,
+                isMobile && { flexWrap: 'wrap', gap: 8 },
+              ]}>
               <Button
-                title="Preview Emergency Card"
+                title={isSmallMobile ? "Preview Card" : "Preview Emergency Card"}
                 variant="primary"
                 icon={<ExternalLinkIcon size={16} color="#FFFFFF" />}
                 onPress={onPreviewEmergency}
-                style={{ flex: 1 }}
+                style={{ flex: isMobile ? undefined : 1, width: isMobile ? '100%' : undefined }}
               />
               <Button
                 title="Edit Details"
@@ -424,11 +434,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 3,
+    ...Shadows.md,
     width: '100%',
     maxWidth: 280,
   },

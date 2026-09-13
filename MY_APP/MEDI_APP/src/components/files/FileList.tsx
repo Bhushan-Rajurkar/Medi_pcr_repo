@@ -21,6 +21,7 @@ import {
   UploadCloudIcon,
 } from '@/components/common/Icons';
 import { BorderRadius, Spacing } from '@/constants/theme';
+import { useResponsive } from '@/hooks/useResponsive';
 
 interface FileListProps {
   onOpenAuth: () => void;
@@ -29,6 +30,7 @@ interface FileListProps {
 export const FileList: React.FC<FileListProps> = ({ onOpenAuth }) => {
   const { colors, isDark } = useAppTheme();
   const { isAuthenticated } = useAuth();
+  const { isSmallMobile, isMobile } = useResponsive();
 
   const [files, setFiles] = useState<MedicalFile[]>([]);
   const [loading, setLoading] = useState(false);
@@ -110,7 +112,11 @@ export const FileList: React.FC<FileListProps> = ({ onOpenAuth }) => {
   return (
     <View style={styles.container}>
       {/* Top Controls: Search Bar & Upload Button */}
-      <View style={styles.controlsRow}>
+      <View
+        style={[
+          styles.controlsRow,
+          isMobile && { flexDirection: 'column', alignItems: 'stretch', gap: 10 },
+        ]}>
         <View
           style={[
             styles.searchWrapper,
@@ -118,6 +124,7 @@ export const FileList: React.FC<FileListProps> = ({ onOpenAuth }) => {
               backgroundColor: isDark ? colors.surfaceElevated : '#FFFFFF',
               borderColor: colors.border,
             },
+            isMobile && { minWidth: '100%', width: '100%' },
           ]}>
           <SearchIcon size={16} color={colors.textMuted} style={{ marginRight: 8 }} />
           <TextInput
@@ -136,17 +143,19 @@ export const FileList: React.FC<FileListProps> = ({ onOpenAuth }) => {
           ) : null}
         </View>
 
-        <View style={styles.actionButtonsRow}>
+        <View style={[styles.actionButtonsRow, isMobile && { width: '100%', justifyContent: 'space-between' }]}>
           <Button
             title="Search"
             variant="secondary"
             size="sm"
+            style={isMobile ? { flex: 1 } : undefined}
             onPress={handleSearchSubmit}
           />
           <Button
             title="Upload Record"
             variant="primary"
             size="sm"
+            style={isMobile ? { flex: 1.5 } : undefined}
             icon={<UploadCloudIcon size={16} color={isDark ? '#0E1612' : '#FFFFFF'} />}
             onPress={() => setUploadModalOpen(true)}
           />

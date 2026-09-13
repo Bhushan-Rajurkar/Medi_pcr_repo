@@ -124,3 +124,46 @@ export const BorderRadius = {
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 export const MaxContentWidth = 1100;
+
+export const Shadows = {
+  sm: Platform.select({
+    web: { boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.08)' } as any,
+    default: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.08,
+      shadowRadius: 2,
+      elevation: 2,
+    },
+  }),
+  md: Platform.select({
+    web: { boxShadow: '0 4px 12px -2px rgba(0, 0, 0, 0.12)' } as any,
+    default: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.12,
+      shadowRadius: 5,
+      elevation: 4,
+    },
+  }),
+  lg: Platform.select({
+    web: { boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.18)' } as any,
+    default: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.18,
+      shadowRadius: 12,
+      elevation: 8,
+    },
+  }),
+  xl: Platform.select({
+    web: { boxShadow: '0 20px 35px -8px rgba(0, 0, 0, 0.25)' } as any,
+    default: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.25,
+      shadowRadius: 20,
+      elevation: 12,
+    },
+  }),
+};

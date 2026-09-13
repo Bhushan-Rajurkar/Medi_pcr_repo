@@ -6,4 +6,128 @@
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;
   --font-rounded: 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif;
   --font-serif: Georgia, 'Times New Roman', serif;
+
+  /* Touch & Layout Variables */
+  --min-touch-target: 44px;
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Base resets for mobile viewport stability */
+html, body {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  overscroll-behavior-y: none;
+}
+
+/* Prevent auto-zoom on mobile inputs */
+input, select, textarea {
+  font-size: 16px;
+}
+
+/* Responsive Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.25);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.45);
+}
+
+/* ==========================================================================
+   MEDIA QUERIES: Mobile Viewports (Phones < 480px)
+   ========================================================================== */
+@media screen and (max-width: 480px) {
+  /* Prevent horizontal overflowing on narrow screens */
+  body, #root {
+    overflow-x: hidden;
+    width: 100%;
+  }
+
+  /* Accessible Touch Target & Text Overflow on Buttons */
+  [role="button"],
+  button {
+    min-height: 40px !important;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Prevent text clipping / awkward breaks inside buttons */
+  [role="button"] span,
+  [role="button"] div,
+  button span {
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    word-break: keep-all;
+  }
+
+  /* Clean horizontal scroll containers on mobile */
+  .horizontal-scroll-row {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .horizontal-scroll-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Modal Dialog Full-Width Adaptation */
+  .responsive-modal-body {
+    padding: 12px !important;
+  }
+}
+
+/* ==========================================================================
+   MEDIA QUERIES: Medium Mobile & Phablets (481px to 640px)
+   ========================================================================== */
+@media screen and (min-width: 481px) and (max-width: 640px) {
+  [role="button"],
+  button {
+    min-height: 42px !important;
+    touch-action: manipulation;
+  }
+}
+
+/* ==========================================================================
+   MEDIA QUERIES: Tablets & Foldables (641px to 1024px)
+   ========================================================================== */
+@media screen and (min-width: 641px) and (max-width: 1024px) {
+  /* Balanced tablet spacing */
+  .responsive-grid-2col {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+}
+
+/* ==========================================================================
+   MEDIA QUERIES: Desktops & Monitors (> 1025px)
+   ========================================================================== */
+@media screen and (min-width: 1025px) {
+  /* Desktop maximum constraints */
+  .desktop-container {
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+}
+
+/* ==========================================================================
+   ACCESSIBILITY: Reduced Motion
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -7,7 +7,7 @@ import {
   Pressable,
 } from 'react-native';
 import { useAppTheme } from '@/context/ThemeContext';
-import { BorderRadius, Spacing } from '@/constants/theme';
+import { BorderRadius, Spacing, Shadows } from '@/constants/theme';
 import { alarmService, ActiveAlarmInfo } from '@/services/alarmService';
 import { ClockIcon, CheckIcon, CloseIcon } from '@/components/common/Icons';
 
@@ -218,11 +218,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     padding: Spacing.five,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 12,
+    ...Shadows.xl,
   },
   iconBadge: {
     width: 72,

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Linking, Platform } from 'react-native';
 import { MedicalFile, fileService } from '@/services/fileService';
 import { useAppTheme } from '@/context/ThemeContext';
-import { BorderRadius, Spacing } from '@/constants/theme';
+import { BorderRadius, Spacing, Shadows } from '@/constants/theme';
 import { Button } from '@/components/common/Button';
 import { FileTextIcon, DownloadIcon, TrashIcon, ExternalLinkIcon } from '@/components/common/Icons';
 
@@ -178,11 +178,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: Spacing.three,
     marginBottom: Spacing.three,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    ...Shadows.sm,
   },
   topRow: {
     flexDirection: 'row',

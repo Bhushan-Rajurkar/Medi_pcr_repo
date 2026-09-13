@@ -19,6 +19,7 @@ import {
   DEFAULT_GEMINI_KEY,
 } from '@/services/geminiService';
 import { prescriptionService } from '@/services/prescriptionService';
+import { filePicker, PickedFile } from '@/utils/filePicker';
 import { formatDisplayDate } from '@/components/common/DatePickerInput';
 import {
   UploadCloudIcon,
@@ -34,6 +35,7 @@ import {
   ShieldCheckIcon,
 } from '@/components/common/Icons';
 import { BorderRadius, Spacing } from '@/constants/theme';
+import { useResponsive } from '@/hooks/useResponsive';
 
 const formatTimeTo12Hour = (timeStr?: string | null): string => {
   if (!timeStr) return '--:--';
@@ -58,6 +60,7 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({
 }) => {
   const { colors, isDark } = useAppTheme();
   const { isAuthenticated } = useAuth();
+  const { isSmallMobile, isMobile } = useResponsive();
 
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [base64Image, setBase64Image] = useState<string | null>(null);
@@ -71,22 +74,76 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({
   const [backendPayload, setBackendPayload] = useState<BackendPrescriptionPayload | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
 
-  // Handle local file selection (no Cloudinary upload, purely client-side memory)
+  // Handle cross-platform picked file (Android, iOS & Web)
+  const handlePickedFile = async (picked: PickedFile) => {
+    setImagePreview(picked.uri);
+    setMimeType(picked.mimeType || 'image/jpeg');
+
+    let b64 = picked.base64;
+    if (!b64) {
+      if (picked.file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const result = e.target?.result as string;
+          const cleanB64 = result.split(',')[1];
+          setBase64Image(cleanB64);
+        };
+        reader.readAsDataURL(picked.file);
+      } else {
+        try {
+          const response = await fetch(picked.uri);
+          const blob = await response.blob();
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result as string;
+            const cleanB64 = result.split(',')[1];
+            setBase64Image(cleanB64);
+          };
+          reader.readAsDataURL(blob);
+        } catch (e) {
+          console.error('Failed to convert image to base64:', e);
+        }
+      }
+    } else {
+      setBase64Image(b64);
+    }
+
+    setExtractedData(null);
+    setBackendPayload(null);
+    setSaveSuccess(false);
+  };
+
+  const handleChooseGallery = async () => {
+    try {
+      const picked = await filePicker.pickImage();
+      if (picked) {
+        await handlePickedFile(picked);
+      }
+    } catch (err: any) {
+      setToast({ id: 'pick_err', type: 'error', message: err.message || 'Could not pick image from device.' });
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    try {
+      const picked = await filePicker.takePhoto();
+      if (picked) {
+        await handlePickedFile(picked);
+      }
+    } catch (err: any) {
+      setToast({ id: 'cam_err', type: 'error', message: err.message || 'Could not open camera on device.' });
+    }
+  };
+
   const handleFileSelect = (file: File) => {
     if (!file) return;
-    setMimeType(file.type || 'image/jpeg');
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = e.target?.result as string;
-      setImagePreview(result);
-      // Strip data url prefix for Gemini API
-      const base64 = result.split(',')[1];
-      setBase64Image(base64);
-      setExtractedData(null);
-      setBackendPayload(null);
-      setSaveSuccess(false);
-    };
-    reader.readAsDataURL(file);
+    handlePickedFile({
+      uri: URL.createObjectURL(file),
+      name: file.name,
+      size: file.size,
+      mimeType: file.type || 'image/jpeg',
+      file,
+    });
   };
 
   // Step 1: Run Gemini AI Extraction
@@ -238,16 +295,16 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({
           </View>
         </View>
 
-        {/* Upload Dropzone (Web native input) */}
-        {Platform.OS === 'web' && (
-          <View
-            style={[
-              styles.dropzone,
-              {
-                backgroundColor: isDark ? colors.surfaceHighlight : colors.surface,
-                borderColor: imagePreview ? colors.primary : colors.border,
-              },
-            ]}>
+        {/* Universal Prescription Image Selector (Android, iOS & Web) */}
+        <View
+          style={[
+            styles.dropzone,
+            {
+              backgroundColor: isDark ? colors.surfaceHighlight : colors.surface,
+              borderColor: imagePreview ? colors.primary : colors.border,
+            },
+          ]}>
+          {Platform.OS === 'web' && (
             <input
               type="file"
               id="prescription-file-input"
@@ -258,38 +315,57 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({
                 if (file) handleFileSelect(file);
               }}
             />
-            <label
-              htmlFor="prescription-file-input"
-              style={{
-                cursor: 'pointer',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '100%',
-                padding: '24px 16px',
-              }}>
-              <UploadCloudIcon size={44} color={colors.primary} />
-              <Text
-                style={{
-                  fontSize: 15,
-                  fontWeight: '700',
-                  color: colors.primary,
-                  marginTop: 8,
-                }}>
-                {imagePreview ? 'Change Selected Prescription' : 'Click or Drag & Drop Prescription Image'}
-              </Text>
-              <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 4 }}>
-                Reads client-side only — does not upload image to external storage
-              </Text>
-            </label>
+          )}
+
+          <UploadCloudIcon size={44} color={colors.primary} />
+          <Text
+            style={{
+              fontSize: 15,
+              fontWeight: '700',
+              color: colors.primary,
+              marginTop: 8,
+              textAlign: 'center',
+            }}>
+            {imagePreview ? 'Prescription Selected' : 'Select Prescription Image / Photo'}
+          </Text>
+          <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 4, marginBottom: 14, textAlign: 'center' }}>
+            Reads locally in memory — AI will deduce medications, dosages & schedules
+          </Text>
+
+          {/* Action buttons for Android / Web / iOS */}
+          <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+            <Button
+              title="📁 Choose Image"
+              variant="outline"
+              size="sm"
+              onPress={handleChooseGallery}
+            />
+            <Button
+              title="📷 Take Photo"
+              variant="outline"
+              size="sm"
+              onPress={handleTakePhoto}
+            />
           </View>
-        )}
+        </View>
 
         {/* Preview image if loaded */}
         {imagePreview && (
           <View style={styles.previewWrapper}>
             <Image source={{ uri: imagePreview }} style={styles.previewImage} resizeMode="contain" />
+            <Pressable
+              onPress={() => {
+                setImagePreview(null);
+                setBase64Image(null);
+                setExtractedData(null);
+                setBackendPayload(null);
+                setSaveSuccess(false);
+              }}
+              style={{ marginTop: 8, alignSelf: 'center', paddingVertical: 6, paddingHorizontal: 14 }}>
+              <Text style={{ fontSize: 13, color: colors.danger, fontWeight: '600' }}>
+                ✕ Remove Image
+              </Text>
+            </Pressable>
           </View>
         )}
 
@@ -523,10 +599,11 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({
                     {
                       backgroundColor: isDark ? colors.surfaceElevated : colors.surfaceElevated,
                       borderColor: colors.border,
+                      flexWrap: isMobile ? 'wrap' : 'nowrap',
                     },
                   ]}>
                   {/* Morning */}
-                  <View style={styles.timingSlot}>
+                  <View style={[styles.timingSlot, isMobile && { width: '48%', flex: undefined, marginVertical: 4 }]}>
                     <View
                       style={[
                         styles.timingIconBadge,
@@ -545,7 +622,7 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({
                   </View>
 
                   {/* Afternoon */}
-                  <View style={styles.timingSlot}>
+                  <View style={[styles.timingSlot, isMobile && { width: '48%', flex: undefined, marginVertical: 4 }]}>
                     <View
                       style={[
                         styles.timingIconBadge,
@@ -564,7 +641,7 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({
                   </View>
 
                   {/* Evening */}
-                  <View style={styles.timingSlot}>
+                  <View style={[styles.timingSlot, isMobile && { width: '48%', flex: undefined, marginVertical: 4 }]}>
                     <View
                       style={[
                         styles.timingIconBadge,
@@ -583,7 +660,7 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({
                   </View>
 
                   {/* Night */}
-                  <View style={styles.timingSlot}>
+                  <View style={[styles.timingSlot, isMobile && { width: '48%', flex: undefined, marginVertical: 4 }]}>
                     <View
                       style={[
                         styles.timingIconBadge,
@@ -731,7 +808,7 @@ const styles = StyleSheet.create({
   },
   dataBox: {
     flex: 1,
-    minWidth: 280,
+    minWidth: 240,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
     padding: Spacing.three,

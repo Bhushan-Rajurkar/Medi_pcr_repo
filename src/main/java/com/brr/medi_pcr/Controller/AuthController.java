@@ -200,15 +200,26 @@ public class AuthController {
     public ResponseEntity<ApiResponse<AuthDtos.UserProfileResponse>> updateProfileMultipart(
             Authentication authentication,
             @RequestParam(value = "name", required = false) String name,
-            @RequestPart(value = "profilePicture", required = false) MultipartFile profilePicture) {
+            @RequestPart(value = "profilePicture", required = false) MultipartFile profilePicturePart,
+            @RequestParam(value = "profilePicture", required = false) MultipartFile profilePictureParam) {
         if (authentication == null || !authentication.isAuthenticated()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Unauthorized"));
         }
+        MultipartFile profilePicture = profilePicturePart != null ? profilePicturePart : profilePictureParam;
         AuthDtos.UserProfileResponse profile = authService.updateProfile(
                 authentication.getName(),
                 name,
                 profilePicture);
         return ResponseEntity.ok(ApiResponse.success("Profile updated successfully", profile));
+    }
+
+    @PostMapping(value = "/profile/multipart", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<AuthDtos.UserProfileResponse>> updateProfileMultipartPost(
+            Authentication authentication,
+            @RequestParam(value = "name", required = false) String name,
+            @RequestPart(value = "profilePicture", required = false) MultipartFile profilePicturePart,
+            @RequestParam(value = "profilePicture", required = false) MultipartFile profilePictureParam) {
+        return updateProfileMultipart(authentication, name, profilePicturePart, profilePictureParam);
     }
 
     @PostMapping("/change-password")

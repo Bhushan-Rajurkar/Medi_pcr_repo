@@ -1,4 +1,5 @@
 import { api } from './api';
+import { filePicker, PickedFile } from '@/utils/filePicker';
 
 export interface MedicalFile {
   id: number;
@@ -14,11 +15,12 @@ export interface MedicalFile {
 
 export const fileService = {
   // Upload a medical report/file
-  async uploadFile(file: File | Blob, fileName?: string): Promise<MedicalFile> {
+  async uploadFile(file: File | Blob | PickedFile, fileName?: string): Promise<MedicalFile> {
     const formData = new FormData();
-    formData.append('file', file as any);
+    filePicker.appendFile(formData, 'file', file as any);
     if (fileName && fileName.trim()) {
       formData.append('fileName', fileName.trim());
+      formData.append('name', fileName.trim());
     }
 
     const res = await api.postMultipart<MedicalFile>('/files/upload', formData);

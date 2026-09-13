@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
 import { alarmService, ActiveAlarmInfo } from '@/services/alarmService';
 import { useAppTheme } from '@/context/ThemeContext';
 import { BorderRadius } from '@/constants/theme';
@@ -35,7 +35,6 @@ export const ActiveRingingBar: React.FC = () => {
           {
             backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
             borderColor: colors.primary,
-            shadowColor: colors.primary,
           },
         ]}>
         <View style={styles.leftInfo}>
@@ -110,10 +109,16 @@ const styles = StyleSheet.create({
     maxWidth: 780,
     width: '100%',
     gap: 10,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 8,
+    ...Platform.select({
+      web: { boxShadow: '0 6px 20px -2px rgba(0, 0, 0, 0.25)' },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.25,
+        shadowRadius: 12,
+        elevation: 8,
+      },
+    }),
   },
   leftInfo: {
     flex: 1,

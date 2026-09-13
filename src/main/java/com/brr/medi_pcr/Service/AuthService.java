@@ -68,16 +68,11 @@ public class AuthService {
 
         String profilePictureUrl = request.getProfilePicture();
 
-        // Upload to Cloudinary if a file is provided
+        // Upload to Cloudinary with fallback if a file is provided
         if (profilePicture != null && !profilePicture.isEmpty()) {
-            try {
-                Map<?, ?> uploadResult = cloudinary.uploader().upload(
-                        profilePicture.getBytes(),
-                        ObjectUtils.asMap("folder", "profile_pictures")
-                );
-                profilePictureUrl = uploadResult.get("secure_url").toString();
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to upload profile picture: " + e.getMessage(), e);
+            String uploadedUrl = uploadOrFallbackProfilePicture(profilePicture);
+            if (uploadedUrl != null) {
+                profilePictureUrl = uploadedUrl;
             }
         }
 
@@ -306,14 +301,9 @@ public class AuthService {
         }
 
         if (profilePicture != null && !profilePicture.isEmpty()) {
-            try {
-                Map<?, ?> uploadResult = cloudinary.uploader().upload(
-                        profilePicture.getBytes(),
-                        ObjectUtils.asMap("folder", "profile_pictures")
-                );
-                user.setProfilePicture(uploadResult.get("secure_url").toString());
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to upload profile picture: " + e.getMessage(), e);
+            String uploadedUrl = uploadOrFallbackProfilePicture(profilePicture);
+            if (uploadedUrl != null) {
+                user.setProfilePicture(uploadedUrl);
             }
         }
 
@@ -354,5 +344,36 @@ public class AuthService {
         return userRepository.findByEmail(authentication.getName())
                 .orElseThrow(() ->
                         new UsernameNotFoundException("User not found with email: " + authentication.getName()));
+    }
+
+    public String uploadOrFallbackProfilePicture(MultipartFile profilePicture) {
+        if (profilePicture == null || profilePicture.isEmpty()) {
+            return null;
+        }
+        try {
+            if (cloudinary != null) {
+                Map<?, ?> uploadResult = cloudinary.uploader().upload(
+                        profilePicture.getBytes(),
+                        ObjectUtils.asMap("folder", "profile_pictures")
+                );
+                if (uploadResult != null && uploadResult.get("secure_url") != null) {
+                    return uploadResult.get("secure_url").toString();
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Cloudinary profile picture upload failed, falling back to data URI: " + e.getMessage());
+        }
+
+        // Fallback: Convert to Base64 Data URI so the picture is never lost
+        try {
+            String mimeType = profilePicture.getContentType() != null && !profilePicture.getContentType().isBlank()
+                    ? profilePicture.getContentType()
+                    : "image/jpeg";
+            String base64 = java.util.Base64.getEncoder().encodeToString(profilePicture.getBytes());
+            return "data:" + mimeType + ";base64," + base64;
+        } catch (Exception ex) {
+            System.err.println("Base64 fallback encoding failed: " + ex.getMessage());
+            return null;
+        }
     }
 }

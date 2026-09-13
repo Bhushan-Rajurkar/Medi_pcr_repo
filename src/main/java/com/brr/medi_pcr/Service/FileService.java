@@ -24,7 +24,7 @@ public class FileService {
     private final CloudinaryService cloudinaryService;
 
     private static final java.util.Set<String> ALLOWED_EXTENSIONS = java.util.Set.of(
-            "pdf", "jpg", "jpeg", "png", "webp", "gif", "bmp", "tiff", "heic", "svg", "doc", "docx"
+            "pdf", "jpg", "jpeg", "png", "webp", "gif", "bmp", "tiff", "heic", "svg", "doc", "docx", "txt", "csv", "xls", "xlsx", "rtf", "odt"
     );
 
     // ==========================

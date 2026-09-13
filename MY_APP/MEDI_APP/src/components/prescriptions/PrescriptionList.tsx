@@ -3,6 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
+  ScrollView,
   ActivityIndicator,
   Pressable,
 } from 'react-native';
@@ -19,6 +20,7 @@ import { MediStatusVisualReport } from './MediStatusVisualReport';
 import { notifyMediStatusUpdated } from '@/services/mediStatusService';
 import { useAppTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
+import { useResponsive } from '@/hooks/useResponsive';
 import { Button } from '@/components/common/Button';
 import { Toast, ToastMessage } from '@/components/common/Toast';
 import { formatDisplayDate } from '@/components/common/DatePickerInput';
@@ -95,6 +97,7 @@ export const PrescriptionList: React.FC<PrescriptionListProps> = ({
 }) => {
   const { colors, isDark } = useAppTheme();
   const { isAuthenticated } = useAuth();
+  const { isSmallMobile, isMobile } = useResponsive();
 
   const [subTab, setSubTab] = useState<PrescriptionSubTab>('history');
   const [prescriptions, setPrescriptions] = useState<PrescriptionResponse[]>([]);
@@ -201,102 +204,122 @@ export const PrescriptionList: React.FC<PrescriptionListProps> = ({
       <Toast toast={toast} onDismiss={() => setToast(null)} />
 
       {/* Sub Navigation Bar */}
-      <View
-        style={[
-          styles.subTabBar,
-          {
-            backgroundColor: isDark ? colors.surfaceElevated : colors.surface,
-            borderColor: colors.border,
-          },
-        ]}>
-        <Pressable
-          onPress={() => setSubTab('history')}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{ marginBottom: Spacing.four }}
+        contentContainerStyle={{ minWidth: '100%' }}>
+        <View
           style={[
-            styles.subTabBtn,
-            subTab === 'history' && {
-              backgroundColor: isDark ? colors.primaryLight : colors.surfaceElevated,
-              borderColor: colors.primary,
-              borderBottomWidth: 2,
+            styles.subTabBar,
+            {
+              backgroundColor: isDark ? colors.surfaceElevated : colors.surface,
+              borderColor: colors.border,
+              flex: 1,
+              marginBottom: 0,
             },
           ]}>
-          <Text
+          <Pressable
+            onPress={() => setSubTab('history')}
             style={[
-              styles.subTabText,
-              {
-                color: subTab === 'history' ? colors.primary : colors.textSecondary,
-                fontWeight: subTab === 'history' ? '700' : '500',
+              styles.subTabBtn,
+              { paddingHorizontal: isSmallMobile ? 8 : 12 },
+              subTab === 'history' && {
+                backgroundColor: isDark ? colors.primaryLight : colors.surfaceElevated,
+                borderColor: colors.primary,
+                borderBottomWidth: 2,
               },
             ]}>
-            Prescriptions ({prescriptions.length})
-          </Text>
-        </Pressable>
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.subTabText,
+                {
+                  color: subTab === 'history' ? colors.primary : colors.textSecondary,
+                  fontWeight: subTab === 'history' ? '700' : '500',
+                  fontSize: isSmallMobile ? 11.5 : 13,
+                },
+              ]}>
+              Prescriptions ({prescriptions.length})
+            </Text>
+          </Pressable>
 
-        <Pressable
-          onPress={() => setSubTab('medicines')}
-          style={[
-            styles.subTabBtn,
-            subTab === 'medicines' && {
-              backgroundColor: isDark ? colors.primaryLight : colors.surfaceElevated,
-              borderColor: colors.primary,
-              borderBottomWidth: 2,
-            },
-          ]}>
-          <Text
+          <Pressable
+            onPress={() => setSubTab('medicines')}
             style={[
-              styles.subTabText,
-              {
-                color: subTab === 'medicines' ? colors.primary : colors.textSecondary,
-                fontWeight: subTab === 'medicines' ? '700' : '500',
+              styles.subTabBtn,
+              { paddingHorizontal: isSmallMobile ? 8 : 12 },
+              subTab === 'medicines' && {
+                backgroundColor: isDark ? colors.primaryLight : colors.surfaceElevated,
+                borderColor: colors.primary,
+                borderBottomWidth: 2,
               },
             ]}>
-            Active Medicines
-          </Text>
-        </Pressable>
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.subTabText,
+                {
+                  color: subTab === 'medicines' ? colors.primary : colors.textSecondary,
+                  fontWeight: subTab === 'medicines' ? '700' : '500',
+                  fontSize: isSmallMobile ? 11.5 : 13,
+                },
+              ]}>
+              Active Medicines
+            </Text>
+          </Pressable>
 
-        <Pressable
-          onPress={() => setSubTab('reminders')}
-          style={[
-            styles.subTabBtn,
-            subTab === 'reminders' && {
-              backgroundColor: isDark ? colors.primaryLight : colors.surfaceElevated,
-              borderColor: colors.primary,
-              borderBottomWidth: 2,
-            },
-          ]}>
-          <Text
+          <Pressable
+            onPress={() => setSubTab('reminders')}
             style={[
-              styles.subTabText,
-              {
-                color: subTab === 'reminders' ? colors.primary : colors.textSecondary,
-                fontWeight: subTab === 'reminders' ? '700' : '500',
+              styles.subTabBtn,
+              { paddingHorizontal: isSmallMobile ? 8 : 12 },
+              subTab === 'reminders' && {
+                backgroundColor: isDark ? colors.primaryLight : colors.surfaceElevated,
+                borderColor: colors.primary,
+                borderBottomWidth: 2,
               },
             ]}>
-            Today's Reminders
-          </Text>
-        </Pressable>
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.subTabText,
+                {
+                  color: subTab === 'reminders' ? colors.primary : colors.textSecondary,
+                  fontWeight: subTab === 'reminders' ? '700' : '500',
+                  fontSize: isSmallMobile ? 11.5 : 13,
+                },
+              ]}>
+              Today's Reminders
+            </Text>
+          </Pressable>
 
-        <Pressable
-          onPress={() => setSubTab('reports')}
-          style={[
-            styles.subTabBtn,
-            subTab === 'reports' && {
-              backgroundColor: isDark ? colors.primaryLight : colors.surfaceElevated,
-              borderColor: colors.primary,
-              borderBottomWidth: 2,
-            },
-          ]}>
-          <Text
+          <Pressable
+            onPress={() => setSubTab('reports')}
             style={[
-              styles.subTabText,
-              {
-                color: subTab === 'reports' ? colors.primary : colors.textSecondary,
-                fontWeight: subTab === 'reports' ? '700' : '500',
+              styles.subTabBtn,
+              { paddingHorizontal: isSmallMobile ? 8 : 12 },
+              subTab === 'reports' && {
+                backgroundColor: isDark ? colors.primaryLight : colors.surfaceElevated,
+                borderColor: colors.primary,
+                borderBottomWidth: 2,
               },
             ]}>
-            Adherence Reports
-          </Text>
-        </Pressable>
-      </View>
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.subTabText,
+                {
+                  color: subTab === 'reports' ? colors.primary : colors.textSecondary,
+                  fontWeight: subTab === 'reports' ? '700' : '500',
+                  fontSize: isSmallMobile ? 11.5 : 13,
+                },
+              ]}>
+              Adherence Reports
+            </Text>
+          </Pressable>
+        </View>
+      </ScrollView>
 
 
       {/* Loading state */}

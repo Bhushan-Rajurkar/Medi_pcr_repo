@@ -11,7 +11,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useAppTheme } from '@/context/ThemeContext';
-import { BorderRadius, Spacing } from '@/constants/theme';
+import { BorderRadius, Spacing, Shadows } from '@/constants/theme';
 import {
   PREDEFINED_QUESTIONS,
   McqQuestion,
@@ -934,11 +934,7 @@ const styles = StyleSheet.create({
     height: '92%',
     borderRadius: BorderRadius.xl,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 10,
+    ...Shadows.xl,
   },
   mobileModalDialog: {
     width: '100%',
@@ -1074,11 +1070,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.xl,
     padding: Spacing.four,
     width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 3,
+    ...Shadows.md,
   },
   planCardHeader: {
     marginBottom: Spacing.two,
@@ -1248,16 +1240,18 @@ const styles = StyleSheet.create({
   confirmSelectionBtn: {
     marginTop: Spacing.two,
     paddingVertical: Spacing.three,
-    paddingHorizontal: Spacing.four,
+    paddingHorizontal: Spacing.three,
     borderRadius: BorderRadius.lg,
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 44,
     elevation: 2,
   },
   confirmSelectionBtnText: {
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '800',
+    textAlign: 'center',
   },
   optionContentRow: {
     flexDirection: 'row',

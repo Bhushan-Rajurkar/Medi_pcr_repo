@@ -29,7 +29,7 @@ public class FileEntity {
     @Column(nullable = false)
     private String fileType;
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String cloudinaryUrl;
 
     @Column(nullable = false)

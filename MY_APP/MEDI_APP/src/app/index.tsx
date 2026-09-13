@@ -5,11 +5,12 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  useWindowDimensions,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
+import { useResponsive } from '@/hooks/useResponsive';
 import { Header } from '@/components/common/Header';
 import { FileList } from '@/components/files/FileList';
 import { PrescriptionScanner } from '@/components/scanner/PrescriptionScanner';
@@ -37,15 +38,14 @@ import {
   QrCodeIcon,
   DietIcon,
 } from '@/components/common/Icons';
-import { BorderRadius, Spacing, MaxContentWidth } from '@/constants/theme';
+import { BorderRadius, Spacing, MaxContentWidth, Shadows } from '@/constants/theme';
 
 type MainTab = 'scanner' | 'prescriptions' | 'files' | 'diet' | 'profile' | 'about';
 
 export default function HomeScreen() {
   const { colors, isDark, theme } = useAppTheme();
   const { user, isAuthenticated } = useAuth();
-  const { width } = useWindowDimensions();
-  const isMobile = width < 640;
+  const { isSmallMobile, isMobile, isTablet, width } = useResponsive();
 
   const [activeTab, setActiveTab] = useState<MainTab>('scanner');
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -94,7 +94,11 @@ export default function HomeScreen() {
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: isMobile ? 96 : Spacing.seven },
+          {
+            paddingHorizontal: isSmallMobile ? 8 : isMobile ? 12 : Spacing.four,
+            paddingTop: isMobile ? 10 : Spacing.four,
+            paddingBottom: isMobile ? (isSmallMobile ? 84 : 96) : Spacing.seven,
+          },
         ]}>
         {/* Hero / Welcome Section */}
         <View
@@ -103,6 +107,7 @@ export default function HomeScreen() {
             {
               backgroundColor: isDark ? colors.surfaceElevated : colors.surface,
               borderColor: colors.border,
+              padding: isSmallMobile ? 12 : isMobile ? 16 : Spacing.five,
             },
           ]}>
           <View style={styles.heroTextContainer}>
@@ -112,32 +117,76 @@ export default function HomeScreen() {
                 { backgroundColor: colors.primaryLight, borderColor: colors.border },
               ]}>
               <HeartPulseIcon size={14} color={colors.primary} />
-              <Text style={[styles.brandTagText, { color: colors.primary }]}>
+              <Text
+                style={[
+                  styles.brandTagText,
+                  {
+                    color: colors.primary,
+                    fontSize: isSmallMobile ? 10 : 11.5,
+                  },
+                ]}>
                 MEDI-PCR CLINICAL PLATFORM
               </Text>
             </View>
 
             {isAuthenticated ? (
               <>
-                <Text style={[styles.heroTitle, { color: colors.text }]}>
+                <Text
+                  style={[
+                    styles.heroTitle,
+                    {
+                      color: colors.text,
+                      fontSize: isSmallMobile ? 18 : isMobile ? 21 : 26,
+                      lineHeight: isSmallMobile ? 24 : isMobile ? 28 : 32,
+                    },
+                  ]}>
                   Welcome, <Text style={{ color: colors.primary }}>{user?.name || 'Healthcare Practitioner'}</Text>
                 </Text>
-                <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+                <Text
+                  style={[
+                    styles.heroSubtitle,
+                    {
+                      color: colors.textSecondary,
+                      fontSize: isSmallMobile ? 12.5 : isMobile ? 13.5 : 14.5,
+                      lineHeight: isSmallMobile ? 18 : isMobile ? 20 : 22,
+                    },
+                  ]}>
                   AI-powered prescription extraction, strict dosage scheduling, and Cloudinary medical diagnostics.
                 </Text>
               </>
             ) : (
               <>
-                <Text style={[styles.heroTitle, { color: colors.text }]}>
+                <Text
+                  style={[
+                    styles.heroTitle,
+                    {
+                      color: colors.text,
+                      fontSize: isSmallMobile ? 18 : isMobile ? 21 : 26,
+                      lineHeight: isSmallMobile ? 24 : isMobile ? 28 : 32,
+                    },
+                  ]}>
                   AI-Powered Prescription Engine & Records
                 </Text>
-                <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+                <Text
+                  style={[
+                    styles.heroSubtitle,
+                    {
+                      color: colors.textSecondary,
+                      fontSize: isSmallMobile ? 12.5 : isMobile ? 13.5 : 14.5,
+                      lineHeight: isSmallMobile ? 18 : isMobile ? 20 : 22,
+                    },
+                  ]}>
                   Scan handwritten or printed prescriptions with Gemini 2.5 Flash, automatically compute frequency rules, and sync directly to Spring Boot backend.
                 </Text>
-                <View style={styles.heroActionRow}>
+                <View
+                  style={[
+                    styles.heroActionRow,
+                    isSmallMobile && { flexDirection: 'column', alignItems: 'stretch' },
+                  ]}>
                   <Button
                     title="Get Started / Sign In"
                     variant="primary"
+                    fullWidth={isSmallMobile}
                     onPress={() => setAuthModalOpen(true)}
                   />
                 </View>
@@ -154,6 +203,7 @@ export default function HomeScreen() {
                   {
                     backgroundColor: isDark ? colors.surfaceHighlight : colors.surfaceElevated,
                     borderColor: colors.border,
+                    minWidth: isSmallMobile ? 110 : 130,
                   },
                 ]}>
                 <ShieldCheckIcon size={20} color={colors.primary} />
@@ -179,6 +229,7 @@ export default function HomeScreen() {
                     borderColor: (emergencyProfile?.isComplete || (emergencyProfile as any)?.complete || emergencyProfile?.qrCodeDataUrl)
                       ? colors.primary
                       : colors.border,
+                    minWidth: isSmallMobile ? 110 : 130,
                   },
                 ]}>
                 <QrCodeIcon
@@ -202,14 +253,21 @@ export default function HomeScreen() {
 
         {/* Desktop / Tablet Tab Navigation Bar */}
         {!isMobile && (
-          <View
-            style={[
-              styles.tabBar,
-              {
-                backgroundColor: isDark ? colors.surfaceElevated : colors.surface,
-                borderColor: colors.border,
-              },
-            ]}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ marginBottom: Spacing.four }}
+            contentContainerStyle={{ minWidth: '100%' }}>
+            <View
+              style={[
+                styles.tabBar,
+                {
+                  backgroundColor: isDark ? colors.surfaceElevated : colors.surface,
+                  borderColor: colors.border,
+                  flex: 1,
+                  marginBottom: 0,
+                },
+              ]}>
           {/* Tab 1: AI Prescription Scanner */}
           <Pressable
             onPress={() => setActiveTab('scanner')}
@@ -374,7 +432,8 @@ export default function HomeScreen() {
             </Text>
           </Pressable>
         </View>
-        )}
+      </ScrollView>
+    )}
 
         {/* Tab View Content */}
         <View style={styles.tabContentArea}>
@@ -648,29 +707,34 @@ export default function HomeScreen() {
             {
               backgroundColor: isDark ? colors.surfaceElevated : '#FFFFFF',
               borderTopColor: colors.border,
+              paddingTop: isSmallMobile ? 3 : Spacing.one * 1.5,
+              paddingBottom: isSmallMobile ? 5 : Spacing.two * 1.5,
             },
           ]}>
           {/* Tab 1: Scanner */}
           <Pressable
             onPress={() => setActiveTab('scanner')}
-            style={styles.mobileNavItem}
+            style={[styles.mobileNavItem, isSmallMobile && { paddingVertical: 2 }]}
             android_ripple={{ color: colors.primaryLight, borderless: true }}>
             <View
               style={[
                 styles.mobileNavIconWrap,
                 activeTab === 'scanner' && { backgroundColor: colors.primaryLight },
+                isSmallMobile && { paddingHorizontal: 6, paddingVertical: 2 },
               ]}>
               <ScanIcon
-                size={20}
+                size={isSmallMobile ? 18 : 20}
                 color={activeTab === 'scanner' ? colors.primary : colors.textSecondary}
               />
             </View>
             <Text
+              numberOfLines={1}
               style={[
                 styles.mobileNavLabel,
                 {
                   color: activeTab === 'scanner' ? colors.primary : colors.textSecondary,
                   fontWeight: activeTab === 'scanner' ? '700' : '500',
+                  fontSize: isSmallMobile ? 9.5 : 10.5,
                 },
               ]}>
               Scanner
@@ -680,24 +744,27 @@ export default function HomeScreen() {
           {/* Tab 2: Medicines */}
           <Pressable
             onPress={() => setActiveTab('prescriptions')}
-            style={styles.mobileNavItem}
+            style={[styles.mobileNavItem, isSmallMobile && { paddingVertical: 2 }]}
             android_ripple={{ color: colors.primaryLight, borderless: true }}>
             <View
               style={[
                 styles.mobileNavIconWrap,
                 activeTab === 'prescriptions' && { backgroundColor: colors.primaryLight },
+                isSmallMobile && { paddingHorizontal: 6, paddingVertical: 2 },
               ]}>
               <PillIcon
-                size={20}
+                size={isSmallMobile ? 18 : 20}
                 color={activeTab === 'prescriptions' ? colors.primary : colors.textSecondary}
               />
             </View>
             <Text
+              numberOfLines={1}
               style={[
                 styles.mobileNavLabel,
                 {
                   color: activeTab === 'prescriptions' ? colors.primary : colors.textSecondary,
                   fontWeight: activeTab === 'prescriptions' ? '700' : '500',
+                  fontSize: isSmallMobile ? 9.5 : 10.5,
                 },
               ]}>
               Medicines
@@ -707,24 +774,27 @@ export default function HomeScreen() {
           {/* Tab 3: Reports */}
           <Pressable
             onPress={() => setActiveTab('files')}
-            style={styles.mobileNavItem}
+            style={[styles.mobileNavItem, isSmallMobile && { paddingVertical: 2 }]}
             android_ripple={{ color: colors.primaryLight, borderless: true }}>
             <View
               style={[
                 styles.mobileNavIconWrap,
                 activeTab === 'files' && { backgroundColor: colors.primaryLight },
+                isSmallMobile && { paddingHorizontal: 6, paddingVertical: 2 },
               ]}>
               <FileTextIcon
-                size={20}
+                size={isSmallMobile ? 18 : 20}
                 color={activeTab === 'files' ? colors.primary : colors.textSecondary}
               />
             </View>
             <Text
+              numberOfLines={1}
               style={[
                 styles.mobileNavLabel,
                 {
                   color: activeTab === 'files' ? colors.primary : colors.textSecondary,
                   fontWeight: activeTab === 'files' ? '700' : '500',
+                  fontSize: isSmallMobile ? 9.5 : 10.5,
                 },
               ]}>
               Reports
@@ -734,24 +804,27 @@ export default function HomeScreen() {
           {/* Tab 4: AI Diet & Fitness Coach */}
           <Pressable
             onPress={() => setActiveTab('diet')}
-            style={styles.mobileNavItem}
+            style={[styles.mobileNavItem, isSmallMobile && { paddingVertical: 2 }]}
             android_ripple={{ color: colors.primaryLight, borderless: true }}>
             <View
               style={[
                 styles.mobileNavIconWrap,
                 activeTab === 'diet' && { backgroundColor: colors.primaryLight },
+                isSmallMobile && { paddingHorizontal: 6, paddingVertical: 2 },
               ]}>
               <DietIcon
-                size={20}
+                size={isSmallMobile ? 18 : 20}
                 color={activeTab === 'diet' ? colors.primary : colors.textSecondary}
               />
             </View>
             <Text
+              numberOfLines={1}
               style={[
                 styles.mobileNavLabel,
                 {
                   color: activeTab === 'diet' ? colors.primary : colors.textSecondary,
                   fontWeight: activeTab === 'diet' ? '700' : '500',
+                  fontSize: isSmallMobile ? 9.5 : 10.5,
                 },
               ]}>
               AI Coach
@@ -767,24 +840,27 @@ export default function HomeScreen() {
                 setAuthModalOpen(true);
               }
             }}
-            style={styles.mobileNavItem}
+            style={[styles.mobileNavItem, isSmallMobile && { paddingVertical: 2 }]}
             android_ripple={{ color: colors.primaryLight, borderless: true }}>
             <View
               style={[
                 styles.mobileNavIconWrap,
                 activeTab === 'profile' && { backgroundColor: colors.primaryLight },
+                isSmallMobile && { paddingHorizontal: 6, paddingVertical: 2 },
               ]}>
               <QrCodeIcon
-                size={20}
+                size={isSmallMobile ? 18 : 20}
                 color={activeTab === 'profile' ? colors.primary : colors.textSecondary}
               />
             </View>
             <Text
+              numberOfLines={1}
               style={[
                 styles.mobileNavLabel,
                 {
                   color: activeTab === 'profile' ? colors.primary : colors.textSecondary,
                   fontWeight: activeTab === 'profile' ? '700' : '500',
+                  fontSize: isSmallMobile ? 9.5 : 10.5,
                 },
               ]}>
               {isAuthenticated ? 'Profile' : 'Sign In'}
@@ -816,10 +892,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: Spacing.five,
     marginBottom: Spacing.four,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 2,
+    ...Shadows.sm,
   },
   heroTextContainer: {
     maxWidth: 720,
@@ -1008,11 +1081,7 @@ const styles = StyleSheet.create({
     zIndex: 9999,
     borderWidth: 1.5,
     borderColor: 'rgba(255, 255, 255, 0.4)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.28,
-    shadowRadius: 10,
-    elevation: 8,
+    ...Shadows.lg,
   },
   fabIconBadge: {
     width: 26,
@@ -1038,11 +1107,16 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.one * 1.5,
     paddingBottom: Spacing.two * 1.5,
     borderTopWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 12,
+    ...Platform.select({
+      web: { boxShadow: '0 -3px 12px rgba(0, 0, 0, 0.08)' },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -3 },
+        shadowOpacity: 0.08,
+        shadowRadius: 6,
+        elevation: 12,
+      },
+    }),
     zIndex: 999,
   },
   mobileNavItem: {

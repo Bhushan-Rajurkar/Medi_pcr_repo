@@ -29,12 +29,18 @@ public class FileController {
     // ==========================
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<FileResponse>> uploadFile(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "fileName", required = false) String fileName) throws Exception {
+            @RequestParam(value = "file", required = false) MultipartFile fileParam,
+            @RequestPart(value = "file", required = false) MultipartFile filePart,
+            @RequestParam(value = "fileName", required = false) String fileName,
+            @RequestParam(value = "name", required = false) String name) throws Exception {
 
-        FileResponse response = fileService.uploadFile(file, fileName);
-        // return ResponseEntity.ok(ApiResponse.success("File uploaded successfully",
-        // response));
+        MultipartFile file = fileParam != null ? fileParam : filePart;
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Please select a valid file to upload."));
+        }
+
+        String chosenName = (fileName != null && !fileName.trim().isEmpty()) ? fileName.trim() : name;
+        FileResponse response = fileService.uploadFile(file, chosenName);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("File uploaded successfully", response));
     }

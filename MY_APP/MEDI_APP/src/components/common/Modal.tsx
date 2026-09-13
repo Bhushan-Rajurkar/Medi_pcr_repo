@@ -8,7 +8,8 @@ import {
   ScrollView,
 } from 'react-native';
 import { useAppTheme } from '@/context/ThemeContext';
-import { BorderRadius, Spacing } from '@/constants/theme';
+import { useResponsive } from '@/hooks/useResponsive';
+import { BorderRadius, Spacing, Shadows } from '@/constants/theme';
 import { CloseIcon } from './Icons';
 
 interface ModalProps {
@@ -27,6 +28,11 @@ export const Modal: React.FC<ModalProps> = ({
   maxWidth = 540,
 }) => {
   const { colors, isDark } = useAppTheme();
+  const { isSmallMobile, isMobile, width } = useResponsive();
+
+  const overlayPadding = isSmallMobile ? 6 : isMobile ? 10 : Spacing.three;
+  const contentPadding = isSmallMobile ? 10 : isMobile ? 14 : Spacing.four;
+  const effectiveMaxWidth = Math.min(maxWidth, width - overlayPadding * 2);
 
   return (
     <RNModal
@@ -34,7 +40,7 @@ export const Modal: React.FC<ModalProps> = ({
       transparent
       animationType="fade"
       onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <View style={[styles.overlay, { padding: overlayPadding }]}>
         <Pressable style={styles.backdrop} onPress={onClose} />
         <View
           style={[
@@ -42,23 +48,52 @@ export const Modal: React.FC<ModalProps> = ({
             {
               backgroundColor: isDark ? colors.surfaceElevated : colors.surfaceElevated,
               borderColor: colors.border,
-              maxWidth,
+              maxWidth: effectiveMaxWidth,
+              maxHeight: isMobile ? '96%' : '90%',
+              borderRadius: isSmallMobile ? BorderRadius.md : BorderRadius.lg,
             },
           ]}>
-          <View style={[styles.header, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
+          <View
+            style={[
+              styles.header,
+              {
+                borderBottomColor: colors.border,
+                paddingHorizontal: contentPadding,
+                paddingVertical: isSmallMobile ? 10 : Spacing.three,
+              },
+            ]}>
+            <Text
+              numberOfLines={1}
+              ellipsizeMode="tail"
+              style={[
+                styles.title,
+                {
+                  color: colors.text,
+                  fontSize: isSmallMobile ? 15 : isMobile ? 16.5 : 18,
+                  flex: 1,
+                  marginRight: 8,
+                },
+              ]}>
+              {title}
+            </Text>
             <Pressable
               onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close modal"
               style={({ pressed }) => [
                 styles.closeBtn,
-                { backgroundColor: pressed ? colors.surfaceHighlight : 'transparent' },
+                {
+                  backgroundColor: pressed ? colors.surfaceHighlight : 'transparent',
+                  width: isSmallMobile ? 28 : 32,
+                  height: isSmallMobile ? 28 : 32,
+                },
               ]}>
-              <CloseIcon size={16} color={colors.textSecondary} />
+              <CloseIcon size={isSmallMobile ? 14 : 16} color={colors.textSecondary} />
             </Pressable>
           </View>
           <ScrollView
             style={styles.body}
-            contentContainerStyle={styles.bodyContent}
+            contentContainerStyle={[styles.bodyContent, { padding: contentPadding }]}
             keyboardShouldPersistTaps="handled">
             {children}
           </ScrollView>
@@ -74,7 +109,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.55)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: Spacing.three,
   },
   backdrop: {
     position: 'absolute',
@@ -85,31 +119,20 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     width: '100%',
-    maxHeight: '90%',
-    borderRadius: BorderRadius.lg,
     borderWidth: 1,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 8,
+    ...Shadows.xl,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.three,
     borderBottomWidth: 1,
   },
   title: {
-    fontSize: 18,
     fontWeight: '700',
   },
   closeBtn: {
-    width: 32,
-    height: 32,
     borderRadius: BorderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
@@ -118,6 +141,6 @@ const styles = StyleSheet.create({
     maxHeight: '100%',
   },
   bodyContent: {
-    padding: Spacing.four,
+    width: '100%',
   },
 });

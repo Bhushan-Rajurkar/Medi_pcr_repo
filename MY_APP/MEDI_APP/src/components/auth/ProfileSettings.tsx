@@ -8,6 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 import { authService } from '@/services/authService';
 import { useAppTheme } from '@/context/ThemeContext';
 import { BorderRadius, Spacing } from '@/constants/theme';
+import { filePicker, PickedFile } from '@/utils/filePicker';
 
 interface ProfileSettingsProps {
   visible: boolean;
@@ -20,7 +21,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({ visible, onClo
 
   const [name, setName] = useState('');
   const [previewUrl, setPreviewUrl] = useState('');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFile, setSelectedFile] = useState<PickedFile | File | null>(null);
 
   // Change Password fields
   const [currentPassword, setCurrentPassword] = useState('');
@@ -39,6 +40,14 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({ visible, onClo
     }
   }, [user, visible]);
 
+  const handlePickPhoto = async () => {
+    const file = await filePicker.pickImage();
+    if (file) {
+      setSelectedFile(file);
+      setPreviewUrl(file.uri);
+    }
+  };
+
   // Handle Profile Update (Name and/or Profile Picture)
   const handleUpdateProfile = async () => {
     if (!name.trim()) {
@@ -53,7 +62,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({ visible, onClo
         // Use Multipart endpoint
         const formData = new FormData();
         formData.append('name', name.trim());
-        formData.append('profilePicture', selectedFile as any);
+        filePicker.appendFile(formData, 'profilePicture', selectedFile);
         updated = await authService.updateProfileMultipart(formData);
       } else {
         // Use JSON endpoint
@@ -61,6 +70,9 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({ visible, onClo
       }
       updateUserInState(updated);
       setSelectedFile(null);
+      if (updated?.profilePicture) {
+        setPreviewUrl(updated.profilePicture);
+      }
       setToast({
         id: 'prof_ok',
         type: 'success',
@@ -185,39 +197,22 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({ visible, onClo
             )}
 
             <View style={styles.photoUploadActions}>
-              {Platform.OS === 'web' && (
-                <>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    id="profile-picture-file-input"
-                    style={{ display: 'none' }}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        setSelectedFile(file);
-                        setPreviewUrl(URL.createObjectURL(file));
-                      }
-                    }}
-                  />
-                  <label
-                    htmlFor="profile-picture-file-input"
-                    style={{
-                      cursor: 'pointer',
-                      display: 'inline-block',
-                      padding: '8px 16px',
-                      borderRadius: BorderRadius.md,
-                      border: `1px solid ${colors.border}`,
-                      backgroundColor: isDark ? colors.surfaceHighlight : colors.surface,
-                      color: colors.text,
-                      fontSize: 13,
-                      fontWeight: 600,
-                      textAlign: 'center',
-                    }}>
-                    {selectedFile ? '🔄 Choose Another Photo' : '📁 Upload New Photo'}
-                  </label>
-                </>
-              )}
+              <Pressable
+                onPress={handlePickPhoto}
+                style={{
+                  paddingVertical: 8,
+                  paddingHorizontal: 16,
+                  borderRadius: BorderRadius.md,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: isDark ? colors.surfaceHighlight : colors.surface,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>
+                  {selectedFile ? '🔄 Choose Another Photo' : '📁 Upload New Photo'}
+                </Text>
+              </Pressable>
 
               {selectedFile && (
                 <Pressable
@@ -234,8 +229,8 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({ visible, onClo
 
               <Text style={[styles.photoHelpText, { color: colors.textSecondary }]}>
                 {selectedFile
-                  ? `Selected: ${selectedFile.name} (${(selectedFile.size / 1024).toFixed(1)} KB)`
-                  : 'Directly upload PNG, JPG, or WEBP from your computer'}
+                  ? `Selected: ${selectedFile.name}`
+                  : 'Upload PNG, JPG, or WEBP photo'}
               </Text>
             </View>
           </View>

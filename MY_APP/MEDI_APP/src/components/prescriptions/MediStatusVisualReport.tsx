@@ -9,7 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import { useAppTheme } from '@/context/ThemeContext';
-import { BorderRadius, Spacing } from '@/constants/theme';
+import { BorderRadius, Spacing, Shadows } from '@/constants/theme';
 import {
   mediStatusService,
   MediStatusReport,
@@ -1325,11 +1325,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   activeTabBtn: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    ...Shadows.sm,
   },
   tabBtnText: {
     fontSize: 13,
@@ -1440,11 +1436,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.four,
     flexWrap: 'wrap',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 3,
+    ...Shadows.md,
   },
   heroLeft: {
     alignItems: 'center',

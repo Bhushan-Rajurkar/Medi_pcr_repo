@@ -8,6 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 import { authService } from '@/services/authService';
 import { useAppTheme } from '@/context/ThemeContext';
 import { Spacing, BorderRadius } from '@/constants/theme';
+import { filePicker, PickedFile } from '@/utils/filePicker';
 
 type AuthView = 'login' | 'register' | 'verify' | 'forgot' | 'reset';
 
@@ -33,7 +34,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFile, setSelectedFile] = useState<PickedFile | File | null>(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const [token, setToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -47,6 +48,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setToken('');
     setNewPassword('');
     setToast(null);
+  };
+
+  const handlePickPhoto = async () => {
+    const file = await filePicker.pickImage();
+    if (file) {
+      setSelectedFile(file);
+      setPreviewUrl(file.uri);
+    }
   };
 
   const handleClose = () => {
@@ -103,7 +112,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         formData.append('name', name.trim());
         formData.append('email', email.trim());
         formData.append('password', password);
-        formData.append('profilePicture', selectedFile as any);
+        filePicker.appendFile(formData, 'profilePicture', selectedFile);
         msg = await authService.registerMultipart(formData);
       } else {
         msg = await register({
@@ -352,39 +361,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               )}
 
               <View style={styles.photoActions}>
-                {Platform.OS === 'web' && (
-                  <>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      id="register-picture-input"
-                      style={{ display: 'none' }}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          setSelectedFile(file);
-                          setPreviewUrl(URL.createObjectURL(file));
-                        }
-                      }}
-                    />
-                    <label
-                      htmlFor="register-picture-input"
-                      style={{
-                        cursor: 'pointer',
-                        display: 'inline-block',
-                        padding: '8px 16px',
-                        borderRadius: BorderRadius.md,
-                        border: `1px solid ${colors.border}`,
-                        backgroundColor: isDark ? colors.surfaceHighlight : colors.surface,
-                        color: colors.text,
-                        fontSize: 13,
-                        fontWeight: 600,
-                        textAlign: 'center',
-                      }}>
-                      {selectedFile ? '🔄 Change Photo' : '📁 Choose Image File'}
-                    </label>
-                  </>
-                )}
+                <Pressable
+                  onPress={handlePickPhoto}
+                  style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 16,
+                    borderRadius: BorderRadius.md,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: isDark ? colors.surfaceHighlight : colors.surface,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>
+                    {selectedFile ? '🔄 Change Photo' : '📁 Choose Photo'}
+                  </Text>
+                </Pressable>
 
                 {selectedFile && (
                   <Pressable

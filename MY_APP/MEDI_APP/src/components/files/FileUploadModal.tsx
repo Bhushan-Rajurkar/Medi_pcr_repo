@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Platform, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Platform, Pressable, ActivityIndicator } from 'react-native';
 import { Modal } from '@/components/common/Modal';
 import { Input } from '@/components/common/Input';
 import { Button } from '@/components/common/Button';
 import { Toast, ToastMessage } from '@/components/common/Toast';
 import { fileService, MedicalFile } from '@/services/fileService';
+import { filePicker, PickedFile } from '@/utils/filePicker';
 import { useAppTheme } from '@/context/ThemeContext';
-import { BorderRadius, Spacing } from '@/constants/theme';
+import { BorderRadius, Spacing, Shadows } from '@/constants/theme';
+import { UploadCloudIcon, CloseIcon, FileTextIcon, CheckIcon } from '@/components/common/Icons';
 
 interface FileUploadModalProps {
   visible: boolean;
@@ -21,7 +23,7 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
 }) => {
   const { colors, isDark } = useAppTheme();
   const [fileName, setFileName] = useState('');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFile, setSelectedFile] = useState<PickedFile | null>(null);
   const [uploading, setUploading] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
 
@@ -36,29 +38,59 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
     onClose();
   };
 
+  const handleFilePicked = (file: PickedFile) => {
+    setSelectedFile(file);
+    // Auto-populate report title from file name if user hasn't set one
+    if (!fileName.trim()) {
+      const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[_\-+]/g, ' ');
+      setFileName(cleanName);
+    }
+  };
+
+  // Cross-platform document picker handler (Android, iOS, Web)
+  const handlePickDocument = async () => {
+    try {
+      const picked = await filePicker.pickDocument();
+      if (picked) {
+        handleFilePicked(picked);
+      }
+    } catch (err: any) {
+      setToast({
+        id: 'pick_err',
+        type: 'error',
+        message: err.message || 'Could not open file picker on this device.',
+      });
+    }
+  };
+
   const handleUpload = async () => {
     if (!selectedFile) {
-      setToast({ id: '1', type: 'error', message: 'Please select a file to upload' });
+      setToast({ id: '1', type: 'error', message: 'Please select a file to upload.' });
       return;
     }
+
+    const reportTitle = fileName.trim() || selectedFile.name;
+
     setUploading(true);
     setToast(null);
+
     try {
-      const res = await fileService.uploadFile(selectedFile, fileName.trim() || undefined);
+      const res = await fileService.uploadFile(selectedFile, reportTitle);
       setToast({
         id: 'upload_ok',
         type: 'success',
-        message: 'Medical report uploaded successfully to Cloudinary!',
+        message: `Medical report "${reportTitle}" uploaded successfully!`,
       });
       setTimeout(() => {
         onSuccess(res);
         handleClose();
       }, 1000);
     } catch (err: any) {
+      console.error('File upload failed:', err);
       setToast({
         id: 'upload_err',
         type: 'error',
-        message: err.message || 'Failed to upload file',
+        message: err.message || 'Failed to upload report. Please check your connection and try again.',
       });
     } finally {
       setUploading(false);
@@ -66,104 +98,120 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
   };
 
   const formatFileSize = (bytes: number): string => {
+    if (!bytes || bytes <= 0) return 'Unknown size';
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   return (
-    <Modal visible={visible} onClose={handleClose} title="Upload Medical Report / Record">
+    <Modal visible={visible} onClose={handleClose} title="Upload Medical Report" maxWidth={560}>
       <Toast toast={toast} onDismiss={() => setToast(null)} />
 
       <Text style={[styles.description, { color: colors.textSecondary }]}>
-        Upload your lab reports, prescriptions, scan results, or medical summaries securely.
+        Upload your lab reports, prescriptions, radiology scans, or test results. Give your report a custom name for easy identification.
       </Text>
 
-      {/* File Selector */}
-      {Platform.OS === 'web' && (
-        <View
-          style={[
-            styles.dropZone,
-            {
-              backgroundColor: isDark ? colors.surfaceHighlight : colors.surface,
-              borderColor: selectedFile ? colors.primary : colors.border,
-            },
-          ]}>
+      {/* Step 1: Universal File Selector Button & Dropzone (Android, iOS & Web) */}
+      <Pressable
+        onPress={handlePickDocument}
+        style={({ pressed }) => [
+          styles.dropZone,
+          {
+            backgroundColor: isDark ? colors.surfaceHighlight : colors.surface,
+            borderColor: selectedFile ? colors.primary : colors.border,
+            opacity: pressed ? 0.85 : 1,
+          },
+        ]}>
+        {Platform.OS === 'web' && (
           <input
             type="file"
-            id="medical-file-upload"
+            id="medical-file-upload-input"
+            accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.doc,.docx,.txt,.csv,.xls,.xlsx"
             style={{ display: 'none' }}
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) {
-                setSelectedFile(file);
-                if (!fileName) {
-                  // Pre-fill user friendly name without extension
-                  const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
-                  setFileName(nameWithoutExt);
-                }
+                handleFilePicked({
+                  uri: URL.createObjectURL(file),
+                  name: file.name,
+                  size: file.size,
+                  mimeType: file.type || 'application/octet-stream',
+                  file,
+                });
               }
             }}
           />
-          <label
-            htmlFor="medical-file-upload"
+        )}
+        <View style={styles.dropZoneContent}>
+          <UploadCloudIcon size={42} color={colors.primary} />
+          <Text
             style={{
-              cursor: 'pointer',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              width: '100%',
-              padding: '24px 16px',
+              fontSize: 15,
+              fontWeight: '700',
+              color: colors.primary,
+              marginTop: 8,
+              marginBottom: 4,
+              textAlign: 'center',
             }}>
-            <Text style={{ fontSize: 32, marginBottom: 8 }}>📄</Text>
-            <Text
-              style={{
-                fontSize: 15,
-                fontWeight: '700',
-                color: colors.primary,
-                marginBottom: 4,
-              }}>
-              {selectedFile ? 'Change Selected File' : 'Click to Browse File'}
-            </Text>
-            <Text style={{ fontSize: 12, color: colors.textMuted }}>
-              Supports PDF, PNG, JPG, DOCX (up to 100MB)
-            </Text>
-          </label>
+            {selectedFile ? '🔄 Choose a Different File' : '📁 Tap to Browse File / Document'}
+          </Text>
+          <Text style={{ fontSize: 12, color: colors.textMuted, textAlign: 'center' }}>
+            Supports PDF, PNG, JPG, DOCX, TXT, CSV (up to 100MB)
+          </Text>
         </View>
-      )}
+      </Pressable>
 
+      {/* Selected File Details Banner */}
       {selectedFile && (
         <View
           style={[
             styles.fileMetaPreview,
             {
-              backgroundColor: colors.primaryLight,
+              backgroundColor: isDark ? colors.surfaceElevated : colors.primaryLight,
               borderColor: colors.border,
             },
           ]}>
-          <Text style={[styles.selectedFileName, { color: colors.text }]}>
-            📁 {selectedFile.name}
-          </Text>
-          <Text style={[styles.selectedFileSize, { color: colors.textSecondary }]}>
-            {formatFileSize(selectedFile.size)}
-          </Text>
+          <View style={{ marginRight: 12 }}>
+            <FileTextIcon size={24} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.selectedFileName, { color: colors.text }]} numberOfLines={1}>
+              {selectedFile.name}
+            </Text>
+            <Text style={[styles.selectedFileSize, { color: colors.textSecondary }]}>
+              Size: {formatFileSize(selectedFile.size)} • Type: {selectedFile.mimeType || 'Document'}
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => setSelectedFile(null)}
+            style={({ pressed }) => [
+              styles.removeBtn,
+              { opacity: pressed ? 0.7 : 1, backgroundColor: isDark ? colors.surfaceHighlight : '#FFFFFF' },
+            ]}>
+            <CloseIcon size={14} color={colors.danger} />
+          </Pressable>
         </View>
       )}
 
-      {/* Optional Custom File Name */}
-      <Input
-        label="Custom File Title (Optional)"
-        placeholder="e.g. Chest X-Ray 2026 / Complete Blood Count"
-        value={fileName}
-        onChangeText={setFileName}
-        helperText="A clear title helps you easily find this report later"
-      />
+      {/* Step 2: Custom Report Name Input */}
+      <View style={{ marginTop: Spacing.two }}>
+        <Input
+          label="Report Name / Title *"
+          placeholder="e.g. Complete Blood Count / Chest X-Ray 2026"
+          value={fileName}
+          onChangeText={setFileName}
+          helperText="Give your report a descriptive name to easily search and identify it later."
+        />
+      </View>
 
+      {/* Step 3: Upload Action Button */}
       <Button
-        title={uploading ? 'Uploading to Cloudinary...' : 'Upload Report'}
+        title={uploading ? 'Uploading Report...' : 'Upload Medical Report'}
         onPress={handleUpload}
         loading={uploading}
-        style={{ marginTop: Spacing.two }}
+        disabled={!selectedFile || uploading}
+        style={{ marginTop: Spacing.three }}
       />
     </Modal>
   );
@@ -172,34 +220,46 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
 const styles = StyleSheet.create({
   description: {
     fontSize: 13.5,
-    lineHeight: 19,
+    lineHeight: 20,
     marginBottom: Spacing.three,
   },
   dropZone: {
     borderWidth: 2,
     borderStyle: 'dashed',
     borderRadius: BorderRadius.lg,
-    marginBottom: Spacing.three,
+    marginBottom: Spacing.two,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+  },
+  dropZoneContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
   },
   fileMetaPreview: {
-    padding: Spacing.two * 1.3,
+    padding: Spacing.two * 1.2,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
-    marginBottom: Spacing.three,
+    marginBottom: Spacing.two,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
   },
   selectedFileName: {
     fontSize: 13.5,
-    fontWeight: '600',
-    flex: 1,
-    marginRight: Spacing.two,
+    fontWeight: '700',
+    marginBottom: 2,
   },
   selectedFileSize: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '500',
+  },
+  removeBtn: {
+    padding: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+    marginLeft: 8,
   },
 });

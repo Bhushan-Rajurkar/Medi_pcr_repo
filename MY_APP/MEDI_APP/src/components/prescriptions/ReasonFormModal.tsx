@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { useAppTheme } from '@/context/ThemeContext';
-import { BorderRadius, Spacing } from '@/constants/theme';
+import { BorderRadius, Spacing, Shadows } from '@/constants/theme';
 import { apiClient } from '@/services/api';
 import { CloseIcon, CheckIcon } from '@/components/common/Icons';
 
@@ -342,11 +342,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.xl,
     borderWidth: 1,
     padding: Spacing.four,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
+    ...Shadows.xl,
   },
   header: {
     flexDirection: 'row',

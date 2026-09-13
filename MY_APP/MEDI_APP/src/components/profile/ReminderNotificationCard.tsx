@@ -9,7 +9,8 @@ import {
 } from 'react-native';
 import { useAppTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
-import { BorderRadius, Spacing } from '@/constants/theme';
+import { BorderRadius, Spacing, Shadows } from '@/constants/theme';
+import { useResponsive } from '@/hooks/useResponsive';
 import { fcmService } from '@/services/fcmService';
 import { alarmService } from '@/services/alarmService';
 import { notifeeNotificationService } from '@/services/notifeeNotificationService';
@@ -25,6 +26,7 @@ import {
 export const ReminderNotificationCard: React.FC = () => {
   const { colors, isDark } = useAppTheme();
   const { user } = useAuth();
+  const { isSmallMobile, isMobile } = useResponsive();
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [fcmToken, setFcmToken] = useState<string | null>(null);
@@ -363,14 +365,15 @@ export const ReminderNotificationCard: React.FC = () => {
       )}
 
       {/* Action Buttons */}
-      <View style={styles.actionsRow}>
+      <View style={[styles.actionsRow, isMobile && { gap: 8 }]}>
         <Button
           title={buttonTitle}
           variant={hasFcmToken ? 'outline' : 'primary'}
           size="md"
           loading={loading}
+          fullWidth={isMobile}
           onPress={handleReminderAction}
-          style={{ flex: 1.2 }}
+          style={{ flex: isMobile ? undefined : 1.3, width: isMobile ? '100%' : undefined }}
         />
 
         <Button
@@ -379,31 +382,43 @@ export const ReminderNotificationCard: React.FC = () => {
           size="md"
           loading={testPushLoading}
           onPress={handleSendTestPush}
-          style={{ flex: 1.2 }}
+          style={{
+            flex: isMobile ? undefined : 1.1,
+            width: isSmallMobile ? '100%' : isMobile ? '48%' : undefined,
+          }}
         />
 
         <Button
-          title="⚡ Direct Test (2 Notifs)"
+          title={isSmallMobile ? "⚡ Direct Test" : "⚡ Direct Test (2 Notifs)"}
           variant="outline"
           size="md"
           onPress={handleTestDeviceNotificationDirectly}
-          style={{ flex: 1.2 }}
+          style={{
+            flex: isMobile ? undefined : 1.1,
+            width: isSmallMobile ? '100%' : isMobile ? '48%' : undefined,
+          }}
         />
 
         <Button
-          title="🔊 Test Alarm Audio"
+          title={isSmallMobile ? "🔊 Alarm Sound" : "🔊 Test Alarm Audio"}
           variant="outline"
           size="md"
           onPress={() => alarmService.testGroupedAlarmSound()}
-          style={{ flex: 1.2 }}
+          style={{
+            flex: isMobile ? undefined : 1.1,
+            width: isSmallMobile ? '100%' : isMobile ? '48%' : undefined,
+          }}
         />
 
         <Button
-          title="📱 Test Notifee (Android)"
+          title={isSmallMobile ? "📱 Notifee App" : "📱 Test Notifee (Android)"}
           variant="outline"
           size="md"
           onPress={handleTestNotifee}
-          style={{ flex: 1.2 }}
+          style={{
+            flex: isMobile ? undefined : 1.1,
+            width: isSmallMobile ? '100%' : isMobile ? '48%' : undefined,
+          }}
         />
       </View>
 
@@ -444,11 +459,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     padding: Spacing.four,
     marginBottom: Spacing.four,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
+    ...Shadows.sm,
   },
   headerRow: {
     flexDirection: 'row',
