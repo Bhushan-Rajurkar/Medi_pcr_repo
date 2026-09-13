@@ -83,7 +83,7 @@ public class FileController {
     }
 
     // ==========================
-    // Download File
+    // Download File (With Proper Name, Extension & Content-Type)
     // ==========================
     @GetMapping("/download/{id}")
     public ResponseEntity<Resource> downloadFile(@PathVariable Long id) {
@@ -91,15 +91,80 @@ public class FileController {
             FileEntity file = fileService.downloadFile(id);
             Resource resource = new UrlResource(file.getCloudinaryUrl());
 
+            String origName = file.getOriginalFileName();
+            String extension = "";
+            if (origName != null && origName.contains(".")) {
+                extension = origName.substring(origName.lastIndexOf("."));
+            }
+
             String filename = file.getFileName();
             if (filename == null || filename.isBlank()) {
-                filename = file.getOriginalFileName();
+                filename = (origName != null && !origName.isBlank()) ? origName : ("medical_report_" + id + extension);
+            } else if (!extension.isEmpty() && !filename.toLowerCase().endsWith(extension.toLowerCase())) {
+                filename = filename + extension;
+            }
+
+            MediaType mediaType = MediaType.APPLICATION_OCTET_STREAM;
+            if (file.getFileType() != null && !file.getFileType().isBlank()) {
+                try {
+                    mediaType = MediaType.parseMediaType(file.getFileType());
+                } catch (Exception ignored) {}
+            } else if (!extension.isEmpty()) {
+                if (extension.equalsIgnoreCase(".pdf")) mediaType = MediaType.APPLICATION_PDF;
+                else if (extension.equalsIgnoreCase(".png")) mediaType = MediaType.IMAGE_PNG;
+                else if (extension.equalsIgnoreCase(".jpg") || extension.equalsIgnoreCase(".jpeg")) mediaType = MediaType.IMAGE_JPEG;
             }
 
             return ResponseEntity.ok()
+                    .contentType(mediaType)
                     .header(
                             HttpHeaders.CONTENT_DISPOSITION,
                             "attachment; filename=\"" + filename + "\"")
+                    .body(resource);
+
+        } catch (Exception e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    // ==========================
+    // View File Inline (For In-App & Browser Preview)
+    // ==========================
+    @GetMapping("/view/{id}")
+    public ResponseEntity<Resource> viewFile(@PathVariable Long id) {
+        try {
+            FileEntity file = fileService.downloadFile(id);
+            Resource resource = new UrlResource(file.getCloudinaryUrl());
+
+            String origName = file.getOriginalFileName();
+            String extension = "";
+            if (origName != null && origName.contains(".")) {
+                extension = origName.substring(origName.lastIndexOf("."));
+            }
+
+            String filename = file.getFileName();
+            if (filename == null || filename.isBlank()) {
+                filename = (origName != null && !origName.isBlank()) ? origName : ("medical_report_" + id + extension);
+            } else if (!extension.isEmpty() && !filename.toLowerCase().endsWith(extension.toLowerCase())) {
+                filename = filename + extension;
+            }
+
+            MediaType mediaType = MediaType.APPLICATION_OCTET_STREAM;
+            if (file.getFileType() != null && !file.getFileType().isBlank()) {
+                try {
+                    mediaType = MediaType.parseMediaType(file.getFileType());
+                } catch (Exception ignored) {}
+            } else if (!extension.isEmpty()) {
+                if (extension.equalsIgnoreCase(".pdf")) mediaType = MediaType.APPLICATION_PDF;
+                else if (extension.equalsIgnoreCase(".png")) mediaType = MediaType.IMAGE_PNG;
+                else if (extension.equalsIgnoreCase(".jpg") || extension.equalsIgnoreCase(".jpeg")) mediaType = MediaType.IMAGE_JPEG;
+            }
+
+            return ResponseEntity.ok()
+                    .contentType(mediaType)
+                    .header(
+                            HttpHeaders.CONTENT_DISPOSITION,
+                            "inline; filename=\"" + filename + "\"")
                     .body(resource);
 
         } catch (Exception e) {

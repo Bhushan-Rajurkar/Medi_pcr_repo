@@ -55,4 +55,9 @@ export const fileService = {
   getDownloadUrl(id: number): string {
     return `${api.getBaseUrl()}/files/download/${id}`;
   },
+
+  // Get inline view URL
+  getViewUrl(id: number): string {
+    return `${api.getBaseUrl()}/files/view/${id}`;
+  },
 };

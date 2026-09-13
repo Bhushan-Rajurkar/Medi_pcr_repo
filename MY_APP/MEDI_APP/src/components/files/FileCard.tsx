@@ -1,10 +1,31 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Linking, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  Linking,
+  Platform,
+  Modal,
+  Image,
+  ActivityIndicator,
+  useWindowDimensions,
+} from 'react-native';
 import { MedicalFile, fileService } from '@/services/fileService';
 import { useAppTheme } from '@/context/ThemeContext';
 import { BorderRadius, Spacing, Shadows } from '@/constants/theme';
 import { Button } from '@/components/common/Button';
-import { FileTextIcon, DownloadIcon, TrashIcon, ExternalLinkIcon } from '@/components/common/Icons';
+import {
+  FileTextIcon,
+  DownloadIcon,
+  TrashIcon,
+  ExternalLinkIcon,
+  CloseIcon,
+  CheckIcon,
+} from '@/components/common/Icons';
+import { downloadFileAsync } from '@/utils/fileSystemHelper';
+import * as Sharing from 'expo-sharing';
+import * as WebBrowser from 'expo-web-browser';
 
 interface FileCardProps {
   file: MedicalFile;
@@ -13,8 +34,52 @@ interface FileCardProps {
 
 export const FileCard: React.FC<FileCardProps> = ({ file, onDelete }) => {
   const { colors, isDark } = useAppTheme();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [imageLoading, setImageLoading] = useState(true);
+
+  const getCleanFileName = (): string => {
+    const orig = file.originalFileName || '';
+    const ext = orig.includes('.')
+      ? orig.substring(orig.lastIndexOf('.'))
+      : file.fileType?.includes('pdf')
+      ? '.pdf'
+      : file.fileType?.includes('png')
+      ? '.png'
+      : file.fileType?.includes('jpeg') || file.fileType?.includes('jpg')
+      ? '.jpg'
+      : '';
+
+    let base = (file.fileName || file.originalFileName || `Medical_Report_${file.id}`).trim();
+    if (ext && !base.toLowerCase().endsWith(ext.toLowerCase())) {
+      base = `${base}${ext}`;
+    }
+    return base;
+  };
+
+  const isImageFile = (): boolean => {
+    const orig = (file.originalFileName || '').toLowerCase();
+    const mime = (file.fileType || '').toLowerCase();
+    return (
+      mime.startsWith('image/') ||
+      orig.endsWith('.jpg') ||
+      orig.endsWith('.jpeg') ||
+      orig.endsWith('.png') ||
+      orig.endsWith('.webp') ||
+      orig.endsWith('.gif') ||
+      orig.endsWith('.bmp')
+    );
+  };
+
+  const isPdfFile = (): boolean => {
+    const orig = (file.originalFileName || '').toLowerCase();
+    const mime = (file.fileType || '').toLowerCase();
+    return mime.includes('pdf') || orig.endsWith('.pdf');
+  };
 
   const formatFileSize = (bytes: number): string => {
     if (!bytes) return '0 B';
@@ -37,22 +102,65 @@ export const FileCard: React.FC<FileCardProps> = ({ file, onDelete }) => {
     }
   };
 
+  // Open In-App Preview (Never triggers unexpected download)
   const handleOpenPreview = () => {
-    if (file.url) {
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        window.open(file.url, '_blank');
+    setPreviewVisible(true);
+  };
+
+  // Mobile fallback to open in browser / external viewer
+  const handleOpenExternalViewer = async () => {
+    const viewUrl = fileService.getViewUrl(file.id);
+    try {
+      if (Platform.OS === 'web') {
+        window.open(viewUrl, '_blank');
       } else {
-        Linking.openURL(file.url);
+        await WebBrowser.openBrowserAsync(viewUrl);
       }
+    } catch {
+      Linking.openURL(viewUrl);
     }
   };
 
-  const handleDownload = () => {
+  // Download with exact filename and original extension
+  const handleDownload = async () => {
+    setDownloading(true);
+    const cleanFileName = getCleanFileName();
     const downloadUrl = fileService.getDownloadUrl(file.id);
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.open(downloadUrl, '_blank');
-    } else {
-      Linking.openURL(downloadUrl);
+
+    try {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        // Fetch as Blob on web to ensure browser saves with exact cleanFileName
+        const res = await fetch(downloadUrl);
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = cleanFileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(blobUrl);
+      } else {
+        // Mobile Android / iOS: download to local cache and prompt native share/save
+        const dlResult = await downloadFileAsync(downloadUrl, cleanFileName);
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(dlResult.uri, {
+            mimeType: file.fileType || (isPdfFile() ? 'application/pdf' : 'application/octet-stream'),
+            dialogTitle: `Save / Share ${cleanFileName}`,
+            UTI: isPdfFile() ? 'com.adobe.pdf' : undefined,
+          });
+        }
+      }
+    } catch (err: any) {
+      console.error('Download failed, falling back to direct link:', err);
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.open(downloadUrl, '_blank');
+      } else {
+        Linking.openURL(downloadUrl);
+      }
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -151,9 +259,10 @@ export const FileCard: React.FC<FileCardProps> = ({ file, onDelete }) => {
               onPress={handleOpenPreview}
             />
             <Button
-              title="Download"
+              title={downloading ? 'Downloading...' : 'Download'}
               variant="outline"
               size="sm"
+              loading={downloading}
               icon={<DownloadIcon size={14} color={colors.primary} />}
               onPress={handleDownload}
             />
@@ -168,6 +277,136 @@ export const FileCard: React.FC<FileCardProps> = ({ file, onDelete }) => {
           </>
         )}
       </View>
+
+      {/* IN-APP PREVIEW MODAL (Never triggers unwanted download) */}
+      <Modal
+        visible={previewVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPreviewVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.previewModalContainer,
+              {
+                backgroundColor: isDark ? colors.surfaceElevated : '#FFFFFF',
+                borderColor: colors.border,
+                maxHeight: windowHeight * 0.9,
+                width: Math.min(windowWidth * 0.95, 800),
+              },
+            ]}>
+            {/* Modal Header */}
+            <View style={[styles.previewHeader, { borderBottomColor: colors.border }]}>
+              <View style={{ flex: 1, paddingRight: Spacing.two }}>
+                <Text numberOfLines={1} style={[styles.previewModalTitle, { color: colors.text }]}>
+                  {file.fileName || file.originalFileName || 'Report Preview'}
+                </Text>
+                <Text numberOfLines={1} style={[styles.previewModalSub, { color: colors.textSecondary }]}>
+                  {file.originalFileName} • {formatFileSize(file.size)}
+                </Text>
+              </View>
+
+              <Pressable
+                onPress={() => setPreviewVisible(false)}
+                style={({ pressed }) => [
+                  styles.closeModalBtn,
+                  { backgroundColor: isDark ? colors.surfaceHighlight : '#F1F5F9', opacity: pressed ? 0.7 : 1 },
+                ]}>
+                <CloseIcon size={18} color={colors.text} />
+              </Pressable>
+            </View>
+
+            {/* Modal Body Preview Content */}
+            <View style={styles.previewBody}>
+              {isImageFile() ? (
+                <View style={styles.imagePreviewWrapper}>
+                  {imageLoading && (
+                    <View style={styles.loadingBox}>
+                      <ActivityIndicator size="large" color={colors.primary} />
+                      <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading Image...</Text>
+                    </View>
+                  )}
+                  <Image
+                    source={{ uri: file.url }}
+                    style={styles.previewImage}
+                    resizeMode="contain"
+                    onLoadEnd={() => setImageLoading(false)}
+                  />
+                </View>
+              ) : isPdfFile() ? (
+                Platform.OS === 'web' ? (
+                  <View style={styles.webPdfWrapper}>
+                    <iframe
+                      src={fileService.getViewUrl(file.id)}
+                      style={{
+                        width: '100%',
+                        height: Math.min(windowHeight * 0.65, 550),
+                        border: 'none',
+                        borderRadius: 6,
+                      }}
+                      title={file.fileName}
+                    />
+                  </View>
+                ) : (
+                  <View style={styles.mobileDocCard}>
+                    <FileTextIcon size={64} color={colors.primary} />
+                    <Text style={[styles.mobileDocTitle, { color: colors.text }]}>
+                      {getCleanFileName()}
+                    </Text>
+                    <Text style={[styles.mobileDocSub, { color: colors.textSecondary }]}>
+                      {formatFileSize(file.size)} • PDF Document
+                    </Text>
+                    <View style={styles.mobileDocButtons}>
+                      <Button
+                        title="Open in Fullscreen Viewer"
+                        variant="primary"
+                        size="md"
+                        icon={<ExternalLinkIcon size={16} color="#FFFFFF" />}
+                        onPress={handleOpenExternalViewer}
+                      />
+                    </View>
+                  </View>
+                )
+              ) : (
+                <View style={styles.mobileDocCard}>
+                  <FileTextIcon size={56} color={colors.primary} />
+                  <Text style={[styles.mobileDocTitle, { color: colors.text }]}>
+                    {getCleanFileName()}
+                  </Text>
+                  <Text style={[styles.mobileDocSub, { color: colors.textSecondary }]}>
+                    {formatFileSize(file.size)} • Document
+                  </Text>
+                  <Button
+                    title="Open Document in Viewer"
+                    variant="outline"
+                    size="md"
+                    icon={<ExternalLinkIcon size={16} color={colors.primary} />}
+                    onPress={handleOpenExternalViewer}
+                  />
+                </View>
+              )}
+            </View>
+
+            {/* Modal Footer Actions */}
+            <View style={[styles.previewFooter, { borderTopColor: colors.border }]}>
+              <Button
+                title={downloading ? 'Downloading...' : `Download ${getCleanFileName()}`}
+                variant="primary"
+                size="sm"
+                loading={downloading}
+                icon={<DownloadIcon size={16} color="#FFFFFF" />}
+                onPress={handleDownload}
+              />
+              <Button
+                title="Close"
+                variant="ghost"
+                size="sm"
+                onPress={() => setPreviewVisible(false)}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -251,5 +490,99 @@ const styles = StyleSheet.create({
     padding: Spacing.one,
     marginLeft: Spacing.one,
     cursor: 'pointer' as any,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.three,
+  },
+  previewModalContainer: {
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+    overflow: 'hidden',
+    ...Shadows.lg,
+  },
+  previewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.three,
+    borderBottomWidth: 1,
+  },
+  previewModalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  previewModalSub: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  closeModalBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewBody: {
+    padding: Spacing.three,
+    minHeight: 250,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imagePreviewWrapper: {
+    width: '100%',
+    height: 380,
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  previewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  loadingBox: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    fontSize: 12,
+    marginTop: Spacing.two,
+  },
+  webPdfWrapper: {
+    width: '100%',
+  },
+  mobileDocCard: {
+    padding: Spacing.four,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mobileDocTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: Spacing.three,
+    textAlign: 'center',
+  },
+  mobileDocSub: {
+    fontSize: 12,
+    marginTop: Spacing.one,
+    marginBottom: Spacing.four,
+    textAlign: 'center',
+  },
+  mobileDocButtons: {
+    marginTop: Spacing.two,
+  },
+  previewFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.three,
+    borderTopWidth: 1,
   },
 });

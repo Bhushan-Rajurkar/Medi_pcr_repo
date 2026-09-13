@@ -62,7 +62,7 @@ export const DietChatbotModal: React.FC<DietChatbotModalProps> = ({
   const [tablePreviewOpen, setTablePreviewOpen] = useState<Record<string, boolean>>({});
 
   const toggleTablePreview = (msgId: string) => {
-    setTablePreviewOpen((prev) => ({ ...prev, [msgId]: !prev[msgId] }));
+    setTablePreviewOpen((prev) => ({ ...prev, [msgId]: prev[msgId] === false ? true : false }));
   };
 
   // Initialize initial welcome message and Question 1
@@ -307,11 +307,77 @@ export const DietChatbotModal: React.FC<DietChatbotModalProps> = ({
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      navigator.clipboard.writeText(text);
+  const formatPlanAsHumanReadableText = (plan: StructuredDietPlanResult): string => {
+    let text = `🍽️ MEDI-AI 7-DAY CLINICAL DIET & EXERCISE PLAN (${plan.category})\n`;
+    if (plan.summary) text += `${plan.summary}\n\n`;
+
+    text += `====================================================\n`;
+    text += `TABLE 1: 7-DAY FOOD SCHEDULE\n`;
+    text += `====================================================\n`;
+    (plan.weeklyDiet || []).forEach((d) => {
+      text += `\n📅 ${d.day.toUpperCase()}\n`;
+      text += `  🌅 Early Morning: ${d.earlyMorning || '-'}\n`;
+      text += `  🥣 Breakfast:     ${d.breakfast || '-'}\n`;
+      text += `  🍎 Mid-Morning:   ${d.midMorning || '-'}\n`;
+      text += `  🍛 Lunch:         ${d.lunch || '-'}\n`;
+      text += `  ☕ Evening Snack: ${d.eveningSnack || '-'}\n`;
+      text += `  🍲 Dinner:        ${d.dinner || '-'}\n`;
+      text += `  🥛 Bedtime:       ${d.bedtime || '-'}\n`;
+    });
+
+    text += `\n====================================================\n`;
+    text += `TABLE 2: DAILY EXERCISES WITH YOGA & MEDITATION\n`;
+    text += `====================================================\n`;
+    const exList = plan.exercises && plan.exercises.length > 0 ? plan.exercises : [];
+    exList.forEach((ex, idx) => {
+      text += `\n${idx + 1}. ${ex.name}\n`;
+      text += `   ⏰ Timings & Duration: ${ex.timing} (⏱️ ${ex.duration})\n`;
+      text += `   🧘 Specific Steps:     ${ex.routine}\n`;
+      text += `   ✨ Primary Benefit:    ${ex.benefits}\n`;
+    });
+
+    if (plan.avoidList && plan.avoidList.length > 0) {
+      text += `\n====================================================\n`;
+      text += `🚫 STRICT AVOIDANCE CHECKLIST\n`;
+      text += `====================================================\n`;
+      plan.avoidList.forEach((item) => {
+        text += ` • ${item}\n`;
+      });
+    }
+
+    if (plan.hydrationAndTips && plan.hydrationAndTips.length > 0) {
+      text += `\n====================================================\n`;
+      text += `💧 HYDRATION & LIFESTYLE GUIDELINES\n`;
+      text += `====================================================\n`;
+      plan.hydrationAndTips.forEach((tip) => {
+        text += ` • ${tip}\n`;
+      });
+    }
+
+    return text;
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      if (Platform.OS === 'web') {
+        if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(text);
+        } else if (typeof document !== 'undefined') {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        }
+      } else {
+        const Clipboard = require('expo-clipboard');
+        await Clipboard.setStringAsync(text);
+      }
       setCopiedPlan(true);
       setTimeout(() => setCopiedPlan(false), 2500);
+    } catch (e) {
+      console.warn('Copy failed:', e);
     }
   };
 
@@ -505,7 +571,7 @@ export const DietChatbotModal: React.FC<DietChatbotModalProps> = ({
                           ]}>
                           <DownloadIcon size={14} color={colors.primary} />
                           <Text style={[styles.actionBtnText, { color: colors.primary }]}>
-                            Save HTML Document
+                            Save PDF Plan
                           </Text>
                         </Pressable>
 
@@ -518,14 +584,14 @@ export const DietChatbotModal: React.FC<DietChatbotModalProps> = ({
                               borderColor: colors.border,
                             },
                           ]}>
-                          <Text style={{ fontSize: 13 }}>{tablePreviewOpen[msg.id] ? '🙈' : '👁️'}</Text>
+                          <Text style={{ fontSize: 13 }}>{tablePreviewOpen[msg.id] === false ? '👁️' : '🙈'}</Text>
                           <Text style={[styles.actionBtnText, { color: colors.text }]}>
-                            {tablePreviewOpen[msg.id] ? 'Hide Tables' : 'Preview Tables in App'}
+                            {tablePreviewOpen[msg.id] === false ? 'Show Tables' : 'Collapse Tables'}
                           </Text>
                         </Pressable>
 
                         <Pressable
-                          onPress={() => copyToClipboard(JSON.stringify(msg.planData, null, 2))}
+                          onPress={() => copyToClipboard(formatPlanAsHumanReadableText(msg.planData!))}
                           style={[
                             styles.actionBtn,
                             {
@@ -537,14 +603,14 @@ export const DietChatbotModal: React.FC<DietChatbotModalProps> = ({
                             <>
                               <CheckIcon size={14} color={colors.success} />
                               <Text style={[styles.actionBtnText, { color: colors.success }]}>
-                                Copied!
+                                Copied Text!
                               </Text>
                             </>
                           ) : (
                             <>
                               <CopyIcon size={14} color={colors.textSecondary} />
                               <Text style={[styles.actionBtnText, { color: colors.textSecondary }]}>
-                                Copy Data
+                                Copy Readable Text
                               </Text>
                             </>
                           )}
@@ -552,8 +618,8 @@ export const DietChatbotModal: React.FC<DietChatbotModalProps> = ({
                       </View>
                     </View>
 
-                    {/* In-app Table Preview (ONLY IF EXPANDED) */}
-                    {tablePreviewOpen[msg.id] && (
+                    {/* In-app Table Preview (Visible by default in human-readable format) */}
+                    {tablePreviewOpen[msg.id] !== false && (
                       <View style={styles.tablePreviewContainer}>
                         {/* Table 1: Food Schedule */}
                         <Text style={[styles.tableSectionTitle, { color: colors.text }]}>

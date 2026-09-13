@@ -36,9 +36,19 @@ public class FileService {
             throw new RuntimeException("Please select a file.");
         }
 
+        String origName = file.getOriginalFilename();
+        String extension = "";
+        if (origName != null && origName.contains(".")) {
+            extension = origName.substring(origName.lastIndexOf("."));
+        }
+
         String targetFileName = (fileName != null && !fileName.trim().isEmpty())
                 ? fileName.trim()
-                : (file.getOriginalFilename() != null ? file.getOriginalFilename() : "document");
+                : (origName != null ? origName : "document");
+
+        if (!extension.isEmpty() && !targetFileName.toLowerCase().endsWith(extension.toLowerCase())) {
+            targetFileName = targetFileName + extension;
+        }
 
         if (!isAllowedFileType(file)) {
             throw new RuntimeException("Only PDF, JPG, JPEG, PNG, WEBP, and document files are allowed.");

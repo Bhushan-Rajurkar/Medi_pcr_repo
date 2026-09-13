@@ -34,11 +34,8 @@ public class CloudinaryService {
         if (contentType.startsWith("image/") || originalFilename.matches(".*\\.(jpg|jpeg|png|webp|gif|bmp|tiff|heic|svg)$")) {
             folder = "mediscan-ai/images";
             resourceType = "image";
-        } else if (contentType.contains("pdf") || originalFilename.endsWith(".pdf")) {
-            folder = "mediscan-ai/reports";
-            resourceType = "raw";
         } else {
-            folder = "mediscan-ai/documents";
+            folder = "mediscan-ai/reports";
             resourceType = "auto";
         }
 
