@@ -88,7 +88,6 @@ public class ProfileEntity {
     @Column(unique = true, nullable = false)
     private String qrCodeToken;
 
-    @Lob
     @Column(name = "qr_code_data_url", columnDefinition = "TEXT")
     private String qrCodeDataUrl;
 

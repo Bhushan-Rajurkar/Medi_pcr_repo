@@ -46,15 +46,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               localStorage.setItem(USER_KEY, JSON.stringify(profile));
               window.dispatchEvent(new Event('SYNC_FCM_TOKEN'));
             }
-          } catch (err) {
-            // Token is invalid/expired - clear stale credentials so user is cleanly redirected to Login
-            console.warn('Session token expired or invalid, resetting auth state:', err);
-            api.setToken(null);
-            setToken(null);
-            setUser(null);
-            if (Platform.OS === 'web' && typeof window !== 'undefined') {
-              localStorage.removeItem(TOKEN_KEY);
-              localStorage.removeItem(USER_KEY);
+          } catch (err: any) {
+            const errStr = (err?.message || '').toLowerCase();
+            const isAuthError =
+              err?.status === 401 ||
+              errStr.includes('401') ||
+              errStr.includes('unauthorized') ||
+              errStr.includes('jwt') ||
+              errStr.includes('token expired') ||
+              errStr.includes('forbidden');
+
+            if (isAuthError) {
+              // Token is invalid/expired - clear stale credentials so user is cleanly redirected to Login
+              console.warn('Session token expired or invalid, resetting auth state:', err);
+              api.setToken(null);
+              setToken(null);
+              setUser(null);
+              if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                localStorage.removeItem(TOKEN_KEY);
+                localStorage.removeItem(USER_KEY);
+              }
+            } else {
+              console.warn('Transient server error while fetching profile, retaining session:', err);
             }
           }
         }

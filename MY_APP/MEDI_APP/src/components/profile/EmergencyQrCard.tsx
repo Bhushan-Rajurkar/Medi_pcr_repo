@@ -45,7 +45,9 @@ export const EmergencyQrCard: React.FC<EmergencyQrCardProps> = ({
     (profile?.isComplete || profile?.complete || !!profile?.qrCodeDataUrl) &&
     profile?.qrCodeDataUrl
   );
-  const emergencyUrl = profile?.emergencyViewUrl || '';
+  const emergencyUrl =
+    profile?.emergencyViewUrl ||
+    (profile?.qrCodeToken ? profileService.getEmergencyViewUrl(profile.qrCodeToken) : '');
 
   // Handle Share QR / Link
   const handleShare = async () => {

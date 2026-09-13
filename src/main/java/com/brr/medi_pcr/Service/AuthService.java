@@ -159,6 +159,7 @@ public class AuthService {
     // ==========================================
     // Login
     // ==========================================
+    @Transactional(readOnly = true)
     public AuthDtos.AuthResponse login(AuthDtos.LoginRequest request) {
         String email = request.getEmail().trim().toLowerCase();
 
@@ -274,6 +275,7 @@ public class AuthService {
     // ==========================================
     // User Profile Management
     // ==========================================
+    @Transactional(readOnly = true)
     public AuthDtos.UserProfileResponse getUserProfile(String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
